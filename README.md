@@ -63,6 +63,3 @@ curl -X POST http://127.0.0.1:8000/api/v1/wallet/validate \
 ## License
 
 MIT — see [LICENSE](LICENSE).
-# Arqon
-# Arqon
-# Arqon

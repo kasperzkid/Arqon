@@ -1,0 +1,25 @@
+# Arqon development stack.
+#
+# Start the stack:
+#   docker compose up -d --build
+# Then check health:
+#   curl http://localhost:8000/api/v1/health
+#
+# The frontend runs with `npm run dev` in ./frontend and proxies /api to
+# the backend service.
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: arqon-backend:latest
+    container_name: arqon-backend
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health'); print('ok')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
