@@ -9,7 +9,7 @@ router = APIRouter(tags=["system"])
 
 
 @router.get("/system/info", response_model=SystemInfoResponse)
-def system_info() -> SystemInfoResponse:
+async def system_info() -> SystemInfoResponse:
     """Return static deployment information about the running service."""
     return SystemInfoResponse(
         app_name=settings.app_name,

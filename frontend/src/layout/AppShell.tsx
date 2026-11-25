@@ -4,14 +4,12 @@ import TopBar from "./TopBar";
 
 export function AppShell() {
   return (
-    <div className="flex min-h-screen bg-background text-foreground">
+    <div className="flex min-h-screen w-full flex-col bg-gradient-to-br from-[#0a0a0c] via-[#070709] to-[#09090b] text-foreground">
+      <TopBar />
+      <main className="min-w-0 flex-1 p-4 pb-24 sm:p-6 sm:pb-24 lg:p-7 lg:pb-24">
+        <Outlet />
+      </main>
       <Sidebar />
-      <div className="flex min-h-screen flex-1 flex-col">
-        <TopBar />
-        <div className="mx-auto w-full max-w-7xl px-6 py-6 lg:px-8">
-          <Outlet />
-        </div>
-      </div>
     </div>
   );
 }

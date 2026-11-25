@@ -48,3 +48,7 @@ class SolanaProvider(ABC):
     @abstractmethod
     async def get_latest_blockhash(self) -> dict[str, Any]:
         """Return the latest confirmed blockhash."""
+
+    async def get_balance(self, address: str) -> int | None:
+        """Return the SOL balance in lamports; ``None`` if not supported or on error."""
+        return None

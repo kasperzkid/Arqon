@@ -1,8 +1,6 @@
 @import "tailwindcss";
 
-/* Arqon — clean, professional cybersecurity dashboard tokens.
-   Dark theme by default with a security-monitor aesthetic (cyan/teal accents,
-   monospace-friendly fonts, subtle glows). */
+/* Arqon — pure near-black security theme */
 
 @theme {
   --font-sans:
@@ -10,48 +8,94 @@
     sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-  --color-background: #0b1020;
-  --color-foreground: #e6edf3;
-  --color-muted: #7d8b9f;
-  --color-card: #111827;
-  --color-card-foreground: #f3f4f6;
-  --color-border: #1f2937;
-  --color-input: #141d30;
-  --color-primary: #08d9d6;
-  --color-secondary: #22d3ee;
-  --color-accent: #34d399;
-  --color-destructive: #f87171;
-  --color-success: #22d3ee;
-  --color-warning: #fbbf24;
-  --color-info: #08d9d6;
+  --color-background: #050506;
+  --color-foreground: #f4f4f5;
+  --color-muted: #9b9ba6;
+  --color-card: #0c0c0e;
+  --color-card-foreground: #f4f4f5;
+  --color-border: #222226;
+  --color-input: #0e0e11;
+  --color-primary: #e4e4e7;
+  --color-secondary: #a1a1aa;
+  --color-accent: #ffffff;
+  --color-destructive: #e8798c;
+  --color-success: #72c49c;
+  --color-warning: #e4b968;
+  --color-info: #a1a1aa;
 
-  --color-severity-info: #34d399;
-  --color-severity-low: #a78bfa;
-  --color-severity-medium: #fbbf24;
-  --color-severity-high: #fb7185;
-  --color-severity-critical: #ef4444;
+  /* Keep utility classes neutral dark monochrome. */
+  --color-white: #f4f4f5;
+  --color-zinc-200: #e4e4e7;
+  --color-zinc-300: #d4d4d8;
+  --color-zinc-400: #a1a1aa;
+  --color-zinc-500: #71717a;
+  --color-zinc-600: #52525b;
+  --color-cyan-400: #d4d4d8;
+  --color-cyan-500: #a1a1aa;
+  --color-purple-400: #d4d4d8;
+
+  --color-severity-info: #a1a1aa;
+  --color-severity-low: #72c49c;
+  --color-severity-medium: #e4b968;
+  --color-severity-high: #e8798c;
+  --color-severity-critical: #d95e75;
 
   --radius: 0.5rem;
-  --shadow-glow: 0 0 24px -2px color-mix(in srgb, var(--color-primary) 25%, transparent);
 }
 
 @layer base {
   html {
     color-scheme: dark;
+    scroll-behavior: smooth;
   }
   body {
     font-family: var(--font-sans);
-    background: var(--color-background);
+    background:
+      radial-gradient(ellipse 74% 52% at 72% -8%, rgba(255, 255, 255, 0.03), transparent 72%),
+      radial-gradient(ellipse 58% 44% at 8% 46%, rgba(255, 255, 255, 0.02), transparent 74%),
+      var(--color-background);
     color: var(--color-foreground);
+    min-height: 100vh;
+    background-attachment: fixed;
   }
   ::selection {
-    background-color: color-mix(in srgb, var(--color-primary) 30%, transparent);
+    background-color: rgba(255, 255, 255, 0.18);
+    color: var(--color-foreground);
   }
 }
 
-/* Subtle ambient glow behind the dashboard. */
-.ambient-glow {
-  background:
-    radial-gradient(ellipse at top right, color-mix(in srgb, var(--color-primary) 12%, transparent) 0%, transparent 50%),
-    var(--color-background);
+/* Animations for floating 3D elements */
+@keyframes float-slow {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-14px) rotate(3deg);
+  }
+}
+
+@keyframes float-delayed {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-16px) rotate(-3deg);
+  }
+}
+
+.animate-float-slow {
+  animation: float-slow 6s ease-in-out infinite;
+}
+
+.animate-float-delayed {
+  animation: float-delayed 7s ease-in-out infinite 1s;
+}
+
+/* Hero background glow */
+.hero-glow {
+  background: radial-gradient(circle at 50% 30%, rgba(169, 155, 233, 0.14) 0%, rgba(169, 155, 233, 0.025) 40%, transparent 70%);
+}
+
+.candlestick-glow {
+  background: radial-gradient(ellipse at 50% 90%, rgba(169, 155, 233, 0.14) 0%, rgba(169, 155, 233, 0.035) 45%, transparent 75%);
 }

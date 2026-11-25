@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.api.dependencies import get_solana_provider
 from app.blockchain.providers.base import SolanaProvider, SolanaProviderError
+from app.detection.engine import detect_activity_findings
 from app.scanner.collectors.wallet_activity import (
     canonical_wallet_address,
     collect_wallet_activity,
@@ -22,7 +23,7 @@ async def wallet_activity(
     limit: int = Query(default=20, ge=1, le=100),
     provider: SolanaProvider = Depends(get_solana_provider),
 ) -> WalletActivityResponse:
-    """Return recent normalized transactions for a public wallet address."""
+    """Return recent normalized transactions and SOL balance for a public wallet address."""
     try:
         canonical_address = canonical_wallet_address(address)
     except ValueError as exc:
@@ -40,7 +41,16 @@ async def wallet_activity(
             detail="Unable to fetch wallet activity",
         ) from exc
 
+    # Best-effort SOL balance fetch; never fails the request
+    sol_balance: int | None = None
+    try:
+        sol_balance = await provider.get_balance(canonical_address)
+    except Exception:  # noqa: BLE001
+        logger.debug("get_balance failed for %s", canonical_address)
+
     return WalletActivityResponse(
         address=canonical_address,
+        sol_balance_lamports=sol_balance,
         items=[WalletActivityItem(**item) for item in items],
+        findings=detect_activity_findings(items),
     )

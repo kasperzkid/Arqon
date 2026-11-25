@@ -1,10 +1,9 @@
 """Unit tests for the system info endpoint."""
 
-from fastapi.testclient import TestClient
-
 from app.main import app
+from tests.conftest import SyncASGIClient
 
-client = TestClient(app)
+client = SyncASGIClient(app)
 
 
 def test_system_info_returns_static_deployment_info():

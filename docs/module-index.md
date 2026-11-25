@@ -11,11 +11,11 @@ One-line overview of every part of Arqon. File paths are relative to the repo ro
 | Core | `backend/app/core/{config,logging}.py` | Pydantic settings, structured logging |
 | Database | `backend/app/database/{base,session}.py` | SQLAlchemy engine/session; `init_db()` |
 | Models | `backend/app/models/__init__.py` | Placeholder ORM package |
-| Schemas | `backend/app/schemas/{wallet,system}.py` | Pydantic request/response models |
+| Schemas | `backend/app/schemas/{wallet,system,activity}.py` | Pydantic request/response models |
 | Services | `backend/app/services/__init__.py` | Placeholder (business services) |
 | Blockchain | `backend/app/blockchain/providers/{base,solana_rpc}.py`, `rpc/`, `solana/` | `SolanaProvider` interface + public JSON-RPC provider |
 | Scanner | `backend/app/scanner/collectors/wallet_activity.py`, `backend/app/scanner/normalizers/transaction.py`, `parsers/` | Recent wallet activity collection and transaction normalization |
-| Detection | `backend/app/detection/{engine,registry}.py`, `rules/` | Placeholder (rule engine/registry/rules) |
+| Detection | `backend/app/detection/{engine,registry}.py`, `rules/` | Deterministic PFX-001 high-frequency activity rule |
 | Risk | `backend/app/risk/{scoring,severity}.py` | Placeholder |
 | Intelligence | `backend/app/intelligence/{sources,indicators}/` | Placeholder |
 | Reports | `backend/app/reports/__init__.py` | Placeholder |

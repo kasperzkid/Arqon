@@ -1,10 +1,9 @@
 """Unit tests for the health endpoint."""
 
-from fastapi.testclient import TestClient
-
 from app.main import app
+from tests.conftest import SyncASGIClient
 
-client = TestClient(app)
+client = SyncASGIClient(app)
 
 
 def test_health_returns_200_and_service_info():

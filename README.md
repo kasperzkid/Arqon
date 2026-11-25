@@ -7,9 +7,10 @@ examines wallet activity, transactions, token transfers, and program
 interactions to identify suspicious patterns and produce transparent,
 evidence-backed security reports.
 
-> **Status:** this is the v0.1.0 foundation — the API, provider abstraction
-> and dashboard scaffold are in place, while the analysis engine itself is
-> under development. Frontend sections use clearly labeled placeholder data.
+> **Status:** the v0.1.0 backend now collects recent wallet transactions,
+> normalizes SOL balance changes, and runs the first evidence-backed activity
+> rule. Broader token analysis and frontend integration remain in development;
+> unfinished frontend sections use clearly labeled placeholder data.
 
 ## Core principles
 

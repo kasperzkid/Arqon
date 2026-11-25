@@ -60,6 +60,7 @@ def create_app() -> FastAPI:
     )
     register_exception_handlers(app)
 
+    app.include_router(health_router)
     for router in (health_router, system_router, wallet_router, activity_router):
         app.include_router(router, prefix=settings.api_v1_prefix)
 

@@ -21,7 +21,7 @@ frontend/ (React + Vite)
     │  HTTP same-origin (Vite dev server proxies /api → backend)
     ▼
 backend/app/main.py ─▶ routers: /api/v1/health, /api/v1/system/info,
-                        /api/v1/wallet/validate
+                        /api/v1/wallet/validate, /api/v1/wallet/activity
 ```
 
 The frontend dashboard reads `/api/v1/health` and `/api/v1/system/info` via
@@ -46,7 +46,8 @@ routers mounted under the `/api/v1` prefix. Served with uvicorn.
 - `routes/wallet.py` — `POST /api/v1/wallet/validate`: validates via Solders;
   private keys are never accepted or stored.
 - `routes/activity.py` — `GET /api/v1/wallet/activity`: fetches recent
-  signatures through the provider and returns normalized transaction metadata.
+  signatures through the provider and returns normalized transaction metadata
+  plus findings from the deterministic detection engine.
 - `dependencies.py` — shared FastAPI dependencies (DB session).
 
 ### `app/core/`
@@ -106,12 +107,14 @@ Token transfer normalization and persistence remain future work.
 
 ### `app/detection/` — rule-based detection
 
-- `registry.py` — rule registry (future).
-- `engine.py` — detection engine (future).
-- `rules/` — individual detection rules (future; see `docs/detection-rules.md`).
+- `registry.py` — typed definitions for registered rules.
+- `engine.py` — evaluates registered activity rules against normalized
+  transactions.
+- `rules/` — future individual rule modules (see `docs/detection-rules.md`).
 
-Every finding must carry an identifiable rule and supporting evidence — the
-framework is documented, not yet built.
+`PFX-001` detects more than five timestamped transactions within ten minutes.
+Findings carry the rule ID, severity, observed count, time bounds, and the
+supporting signatures. This is a review signal, not a maliciousness verdict.
 
 ### `app/risk/` — risk scoring
 

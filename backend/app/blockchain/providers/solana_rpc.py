@@ -62,7 +62,24 @@ class SolanaRPCProvider(SolanaProvider):
         return await self._request("getSignaturesForAddress", params) or []
 
     async def get_transaction(self, signature: str) -> dict[str, Any] | None:
-        return await self._request("getTransaction", [signature])
+        return await self._request(
+            "getTransaction",
+            [
+                signature,
+                {
+                    "encoding": "jsonParsed",
+                    "maxSupportedTransactionVersion": 0,
+                    "commitment": "confirmed",
+                },
+            ],
+        )
+
+    async def get_balance(self, address: str) -> int | None:
+        """Return the SOL balance in lamports for the given address, or None on error."""
+        result = await self._request("getBalance", [address])
+        if isinstance(result, dict):
+            return result.get("value")
+        return None
 
     async def get_token_accounts_by_owner(self, owner: str, mint: str) -> list[dict[str, Any]]:
         return await self._request("getTokenAccountsByOwner", [owner, {"mint": mint}]) or []

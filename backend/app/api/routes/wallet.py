@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 @router.post("/wallet/validate", response_model=WalletValidateResponse)
-def validate_wallet(payload: WalletValidateRequest) -> WalletValidateResponse:
+async def validate_wallet(payload: WalletValidateRequest) -> WalletValidateResponse:
     """Validate a Solana public address.
 
     Uses ``solders.Pubkey.from_string``, which only accepts a 32-byte public

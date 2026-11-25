@@ -38,11 +38,14 @@ def normalize_transaction(
         if index < len(pre) and index < len(post):
             sol_change = int(post[index]) - int(pre[index])
 
+    err = meta.get("err")
+    status = "failed" if err is not None else "confirmed"
+
     return {
         "signature": signature,
         "slot": transaction.get("slot"),
         "block_time": transaction.get("blockTime"),
-        "status": "failed" if meta.get("err") is not None else "success",
+        "status": status,
         "fee_lamports": meta.get("fee"),
         "sol_change_lamports": sol_change,
     }

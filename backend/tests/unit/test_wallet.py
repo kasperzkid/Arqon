@@ -1,11 +1,11 @@
 """Unit tests for POST /api/v1/wallet/validate."""
 
-from fastapi.testclient import TestClient
 from solders.keypair import Keypair
 
 from app.main import app
+from tests.conftest import SyncASGIClient
 
-client = TestClient(app)
+client = SyncASGIClient(app)
 
 
 def test_validate_accepts_a_valid_public_address():

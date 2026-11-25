@@ -58,7 +58,10 @@ metadata. This endpoint is read-only and accepts public addresses only.
 - Query parameters: `address` (required), `limit` (optional, 1–100; default 20).
 - Success `200` includes the canonical address and an `items` array with each
   transaction's `signature`, `slot`, `block_time`, `status`, `fee_lamports`,
-  and `sol_change_lamports`.
+  and `sol_change_lamports`, plus a `findings` array.
+- `PFX-001` reports more than five transactions in a ten-minute window. The
+  finding includes the observed count, time bounds, and supporting signatures.
+  It signals a pattern for review and does not establish malicious intent.
 - Missing transaction data is returned as `status: "unavailable"` with null
   metadata. Provider failures return `502`; invalid addresses return `400`.
 - `sol_change_lamports` is the queried wallet's post-minus-pre native SOL
@@ -71,8 +74,7 @@ Centralized exception handling returns:
 - `422` for request validation failures (`error: "validation_error"`).
 - `500` for unexpected server errors (`error: "internal_error"`).
 
-## Coming later (not implemented in v0.1.0)
+## Planned
 
-Wallet activity, transaction endpoints, security findings and report
-endpoints will be added as the scanner and detection engine land
-(see [architecture](architecture.md)).
+Dedicated transaction, security finding, and report endpoints are planned as
+the scanner and detection engine expand (see [architecture](architecture.md)).
