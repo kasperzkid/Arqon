@@ -12,7 +12,7 @@ frontend parts, and how they connect today and as the engine develops.
 | Backend | Python 3.11+, FastAPI, Pydantic, SQLAlchemy, Alembic, HTTPX, Solders |
 | Database | SQLite (local) — PostgreSQL-compatible later |
 | Infra | Docker, Docker Compose, GitHub Actions |
-| Blockchain | Solana JSON-RPC (public mainnet-beta endpoint) |
+| Blockchain | Solana JSON-RPC (public mainnet-beta, devnet and testnet endpoints) |
 
 ## Data flow (current)
 
@@ -21,16 +21,24 @@ frontend/ (React + Vite)
     │  HTTP same-origin (Vite dev server proxies /api → backend)
     ▼
 backend/app/main.py ─▶ routers: /api/v1/health, /api/v1/system/info,
-                        /api/v1/wallet/validate, /api/v1/wallet/activity
+                        /api/v1/wallet/validate, /api/v1/wallet/activity,
+                        /api/v1/wallet/probe
 ```
 
-The frontend dashboard reads `/api/v1/health` and `/api/v1/system/info` via
-TanStack Query and renders clearly labeled placeholder data while the
-analysis engine lands.
+A wallet investigation in the UI follows this path:
 
 ```
 wallet/validate ─▶ Solders Pubkey validation (public address only)
+wallet/probe    ─▶ mainnet + devnet + testnet queried in parallel
+                   (balance and recent transaction count per cluster)
+wallet/activity ─▶ recent transactions + findings for the selected network
+                   (network defaults to mainnet; devnet/testnet supported)
 ```
+
+The dashboard and the wallet analysis page share one client-side store
+(`WalletAnalysisProvider`), so a scan started on either page immediately
+populates the other. The latest analysis is persisted to `localStorage` and
+rehydrated on reload.
 
 ## Backend parts
 
@@ -46,9 +54,15 @@ routers mounted under the `/api/v1` prefix. Served with uvicorn.
 - `routes/wallet.py` — `POST /api/v1/wallet/validate`: validates via Solders;
   private keys are never accepted or stored.
 - `routes/activity.py` — `GET /api/v1/wallet/activity`: fetches recent
-  signatures through the provider and returns normalized transaction metadata
-  plus findings from the deterministic detection engine.
-- `dependencies.py` — shared FastAPI dependencies (DB session).
+  signatures through the provider for the requested `network` and returns
+  normalized transaction metadata plus findings from the deterministic
+  detection engine.
+- `routes/probe.py` — `GET /api/v1/wallet/probe`: queries mainnet, devnet and
+  testnet in parallel for balance and recent activity, and reports the
+  preferred `primary_network`. Per-cluster RPC errors are returned in the
+  payload rather than failing the request.
+- `dependencies.py` — shared FastAPI dependencies: the DB session and the
+  network-aware `get_solana_provider` (still overridable in tests).
 
 ### `app/core/`
 
@@ -84,8 +98,10 @@ Placeholder package. Rules, scanners and reports services will live here.
   `get_token_accounts_by_owner`, `get_latest_blockhash`. Plus error types
   (`SolanaProviderError`, `SolanaProviderTimeoutError`,
   `SolanaProviderRateLimitError`).
+- `networks.py` — the supported clusters (`mainnet`, `devnet`, `testnet`),
+  their public JSON-RPC URLs, and `resolve_network_rpc_url()`.
 - `providers/solana_rpc.py` — `SolanaRPCProvider` over the public Solana
-  JSON-RPC endpoint (configurable via `SOLANA_RPC_URL`, timeout via
+  JSON-RPC endpoint (default configurable via `SOLANA_RPC_URL`, timeout via
   `SOLANA_REQUEST_TIMEOUT`). Handles timeouts, network errors, invalid JSON,
   RPC error payloads, HTTP 429 rate limits; missing data returns empty
   structures (`[]`/`{}`).
@@ -126,7 +142,8 @@ supporting signatures. This is a review signal, not a maliciousness verdict.
 
 ### `app/reports/` — report generation
 
-Placeholder package. Reports are built on findings once they exist.
+Backend report persistence is not implemented. The frontend generates reports
+from completed live scans and stores them in browser local storage.
 
 ### `alembic/` — migrations
 
@@ -144,16 +161,25 @@ schema revision, applied with `alembic upgrade head`).
 
 ### `src/features/` — pages
 
-- `dashboard/DashboardPage.tsx` — stat cards, activity chart, placeholder.
-- `wallet-analysis/WalletAnalysisPage.tsx` — live address validation call,
-  result display, labeled placeholder.
-- `transactions/TransactionsPage.tsx` — placeholder transaction table.
-- `security-findings/SecurityFindingsPage.tsx` + `BadgeRow.tsx` — placeholder
-  findings list with severity badges.
-- `reports/ReportsPage.tsx` — placeholder reports list.
+- `dashboard/DashboardPage.tsx` — live overview of the most recent scan:
+  KPI strip (SOL balance, transactions, findings, active networks), quick
+  scan, composite risk gauge, transaction status distribution, rule-based
+  alerts, session scan history and per-cluster network presence.
+- `wallet-analysis/WalletAnalysisPage.tsx` — address validation, multi-network
+  probe, activity request and result display.
+- `wallet-analysis/WalletAnalysisProvider.tsx` — shared analysis store used by
+  both pages; persists the latest analysis to `localStorage`.
+- `docs/DocsPage.tsx` — in-app documentation page served at `/docs`.
+- `transactions/TransactionsPage.tsx` — live wallet transaction search and
+  normalized activity table.
+- `security-findings/SecurityFindingsPage.tsx` + `BadgeRow.tsx` — rule findings
+  fetched from wallet activity and their supporting evidence.
+- `reports/ReportsPage.tsx` — reports generated from live scans, stored locally
+  in the browser, inspected, and exported as Markdown or JSON.
 
-Every section renders labeled placeholder data (`PLACEHOLDER_MARKER`), never
-fabricated findings.
+Marketing illustrations are labeled as samples. Wallet analysis, dashboard,
+transactions, security findings, and reports use live API data; findings are
+not generated from sample or placeholder records.
 
 ### `src/components/`
 
@@ -168,7 +194,8 @@ fabricated findings.
 
 ### `src/services/api.ts` — real API client
 
-`fetchSystemInfo`, `fetchHealth`, `validateWalletAddress` → `/api/v1/*`
+`fetchSystemInfo`, `fetchHealth`, `validateWalletAddress`,
+`fetchWalletProbe`, `fetchWalletActivity` → `/api/v1/*`
 (same-origin, proxied to the backend in dev).
 
 ### `src/hooks/useHealth.ts`

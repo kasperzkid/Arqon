@@ -25,7 +25,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useWalletAnalysis } from "../wallet-analysis/WalletAnalysisProvider";
 
 const NETWORK_META: Record<string, { label: string; dot: string; text: string }> = {
-  mainnet: { label: "Mainnet Beta", dot: "bg-emerald-400", text: "text-emerald-300" },
+  mainnet: { label: "Mainnet Beta", dot: "bg-zinc-400", text: "text-zinc-300" },
   devnet: { label: "Devnet", dot: "bg-sky-400", text: "text-sky-300" },
   testnet: { label: "Testnet", dot: "bg-amber-400", text: "text-amber-300" },
 };
@@ -334,15 +334,16 @@ export default function DashboardPage() {
               scanning
                 ? "border-amber-500/25 bg-amber-500/10 text-amber-300"
                 : scanResult
-                  ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300"
-                  : "border-white/10 bg-white/[0.04] text-zinc-400"
+                  ? "border-white/15 bg-white/[0.06] text-zinc-200"
+                  : "border-white/10 bg-white/[0.04] text-zinc-500"
             }`}
           >
             <span
               className={`h-1.5 w-1.5 rounded-full ${
-                scanning ? "animate-pulse bg-amber-400" : scanResult ? "bg-emerald-400" : "bg-zinc-600"
+                scanning ? "animate-pulse bg-amber-400" : scanResult ? "bg-zinc-300" : "bg-zinc-600"
               }`}
             />
+            {scanning ? "Scanning" : scanResult ? "Analysis ready" : "Idle"}
           </span>
           <Link
             to="/wallet-analysis"

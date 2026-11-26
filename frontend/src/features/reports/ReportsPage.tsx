@@ -44,8 +44,8 @@ const PRESET_WALLETS = [
 
 function RatingBadge({ rating }: { rating: ReportItem["riskRating"] }) {
   const styles: Record<ReportItem["riskRating"], string> = {
-    "Clean Audit": "border-emerald-500/25 bg-emerald-500/10 text-emerald-400",
-    "Low Risk": "border-emerald-500/20 bg-emerald-500/8 text-emerald-300",
+    "Clean Audit": "border-white/15 bg-white/[0.06] text-zinc-200",
+    "Low Risk": "border-white/15 bg-white/[0.04] text-zinc-300",
     "Medium Risk": "border-amber-500/25 bg-amber-500/10 text-amber-300",
     "High Risk": "border-rose-500/30 bg-rose-500/12 text-rose-300",
   };
@@ -255,7 +255,7 @@ ${findingsBlock}
           <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-500">
             Clean Audits
           </p>
-          <p className="mt-1.5 text-2xl font-bold tabular-nums text-emerald-400">{cleanCount}</p>
+          <p className="mt-1.5 text-2xl font-bold tabular-nums text-zinc-200">{cleanCount}</p>
           <p className="mt-1 text-[11px] text-zinc-500">zero violations</p>
         </div>
         <div className="rounded-2xl border border-white/[0.06] bg-[#0c0c0f]/95 p-4">
@@ -445,7 +445,7 @@ ${findingsBlock}
                   className="shrink-0 text-zinc-500 hover:text-white"
                 >
                   {copied === selected.wallet ? (
-                    <Check className="h-3 w-3 text-emerald-400" />
+                    <Check className="h-3 w-3 text-zinc-300" />
                   ) : (
                     <Copy className="h-3 w-3" />
                   )}
@@ -470,7 +470,7 @@ ${findingsBlock}
               <div>
                 <p className="font-mono text-[9px] uppercase text-zinc-500">Findings</p>
                 <p
-                  className={`mt-0.5 font-mono text-xs font-bold ${selected.findingsCount > 0 ? "text-amber-400" : "text-emerald-400"}`}
+                  className={`mt-0.5 font-mono text-xs font-bold ${selected.findingsCount > 0 ? "text-amber-400" : "text-zinc-300"}`}
                 >
                   {selected.findingsCount}
                 </p>
@@ -504,7 +504,7 @@ ${findingsBlock}
               </div>
             ) : (
               <div className="flex items-center gap-2 rounded-xl border border-white/[0.05] bg-[#070709] px-3 py-2.5 text-xs text-zinc-400">
-                <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                <ShieldCheck className="h-4 w-4 text-zinc-300" />
                 Zero rule violations recorded.
               </div>
             )}
@@ -524,7 +524,7 @@ ${findingsBlock}
                   className="shrink-0 text-zinc-500 hover:text-white"
                 >
                   {copied === selected.hash ? (
-                    <Check className="h-3 w-3 text-emerald-400" />
+                    <Check className="h-3 w-3 text-zinc-300" />
                   ) : (
                     <Copy className="h-3 w-3" />
                   )}

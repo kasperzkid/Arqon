@@ -3,14 +3,13 @@
 **Analyze. Investigate. Verify.**
 
 Arqon is an open-source, rule-based Solana security analysis platform. It
-examines wallet activity, transactions, token transfers, and program
-interactions to identify suspicious patterns and produce transparent,
-evidence-backed security reports.
+examines public wallet activity across mainnet, devnet, and testnet, normalizes
+recent transactions, and returns transparent, evidence-backed rule findings.
 
-> **Status:** the v0.1.0 backend now collects recent wallet transactions,
-> normalizes SOL balance changes, and runs the first evidence-backed activity
-> rule. Broader token analysis and frontend integration remain in development;
-> unfinished frontend sections use clearly labeled placeholder data.
+> **Status:** wallet analysis, dashboard scans, transactions, security findings,
+> and report generation use live wallet activity. Reports are generated in the
+> browser from completed scans and saved locally; there is no server-side report
+> archive. Token transfer parsing and deeper program analysis are not available.
 
 ## Core principles
 
@@ -25,7 +24,7 @@ evidence-backed security reports.
 - **Backend:** Python 3.11+, FastAPI, Pydantic, SQLAlchemy, Alembic, HTTPX, Solders
 - **Database:** SQLite (local) / PostgreSQL-compatible (future)
 - **Infrastructure:** Docker, Docker Compose, GitHub Actions
-- **Blockchain:** Solana JSON-RPC (public mainnet-beta endpoint)
+- **Blockchain:** Solana JSON-RPC (public mainnet-beta, devnet and testnet endpoints)
 
 ## Quick start
 
@@ -52,6 +51,8 @@ curl http://127.0.0.1:8000/api/v1/system/info
 curl -X POST http://127.0.0.1:8000/api/v1/wallet/validate \
   -H 'Content-Type: application/json' \
   -d '{"address":"9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYinNyB"}'
+curl 'http://127.0.0.1:8000/api/v1/wallet/probe?address=9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYinNyB'
+curl 'http://127.0.0.1:8000/api/v1/wallet/activity?address=9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYinNyB&network=devnet'
 ```
 
 ## Documentation

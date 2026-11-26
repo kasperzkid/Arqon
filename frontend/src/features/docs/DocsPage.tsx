@@ -76,7 +76,7 @@ export default function DocsPage() {
         <section className="docs-hero" id="introduction" data-doc-section>
           <h1>Understand how<br/><span>Arqon works.</span></h1>
           <p>Setup, architecture, API usage, and detection behavior for Arqon’s open-source Solana security analysis platform.</p>
-          <div className="docs-hero-meta"><span><i/> API v1</span><span>Solana mainnet-beta</span><span>MIT License</span></div>
+          <div className="docs-hero-meta"><span><i/> API v1</span><span>Solana mainnet · devnet · testnet</span><span>MIT License</span></div>
         </section>
 
         <section className="docs-section" id="quickstart" data-doc-section>
@@ -95,23 +95,26 @@ export default function DocsPage() {
           <p>An investigation follows a small, inspectable path from an address to normalized activity and deterministic rule output.</p>
           <div className="docs-flow">
             <article><span>01</span><b>Validate</b><p>Solders checks that the submitted string is a valid Solana public key.</p></article><i><ArrowRight size={16}/></i>
-            <article><span>02</span><b>Collect</b><p>The provider fetches recent signatures, transaction details, and the account’s SOL balance.</p></article><i><ArrowRight size={16}/></i>
-            <article><span>03</span><b>Normalize</b><p>Transaction metadata is converted to a stable schema for analysis and display.</p></article><i><ArrowRight size={16}/></i>
+            <article><span>02</span><b>Probe</b><p>Mainnet, devnet and testnet are queried in parallel to find where the wallet holds a balance or has recent activity.</p></article><i><ArrowRight size={16}/></i>
+            <article><span>03</span><b>Collect & normalize</b><p>Recent signatures, transaction details and the SOL balance are fetched from the active cluster and mapped to a stable schema.</p></article><i><ArrowRight size={16}/></i>
             <article><span>04</span><b>Evaluate</b><p>Registered rules inspect normalized activity and return findings with supporting evidence.</p></article>
           </div>
-          <CodeBlock title="Current response path" language="text" code={`Browser → POST /api/v1/wallet/validate\n        → GET  /api/v1/wallet/activity\nAPI     → Solana JSON-RPC (read-only)\n        → normalize transactions → evaluate rules`} />
+          <CodeBlock title="Current response path" language="text" code={`Browser → POST /api/v1/wallet/validate\n        → GET  /api/v1/wallet/probe\n        → GET  /api/v1/wallet/activity?network=<primary>\nAPI     → Solana JSON-RPC (read-only)\n        → normalize transactions → evaluate rules\n        → dashboard + wallet analysis (shared store)`} />
         </section>
 
         <section className="docs-section" id="wallet-analysis" data-doc-section>
           <SectionNumber number="03" label="WALLET ANALYSIS" />
           <h2>Analyze a public address</h2>
-          <p>The analyzer first validates an address, then requests recent wallet activity. The current UI requests five recent transactions; the API accepts a configurable limit from 1 to 100.</p>
+          <p>The analyzer validates an address, probes all supported clusters to find where the wallet is active, then requests activity from that network. The API accepts a limit from 1 to 100; the UI requests five. The dashboard reads the same shared store, so the latest scan appears on both pages and survives a reload.</p>
           <h3>Validate the address</h3>
           <CodeBlock title="Validate a Solana public key" language="curl" code={`curl -X POST http://localhost:8000/api/v1/wallet/validate \\\n  -H 'Content-Type: application/json' \\\n  -d '{"address":"9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYinNyB"}'`} />
           <CodeBlock title="Validation response" language="json" code={`{\n  "valid": true,\n  "address": "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYinNyB",\n  "is_public_address": true\n}`} />
+          <h3>Detect the active network</h3>
+          <CodeBlock title="Probe mainnet, devnet and testnet" language="curl" code={`curl 'http://localhost:8000/api/v1/wallet/probe?address=9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYinNyB'`} />
+          <p className="docs-note">The probe returns one entry per cluster (`mainnet`, `devnet`, `testnet`) with balance, recent transaction count and an `active` flag, plus the preferred `primary_network`. RPC errors are reported per cluster instead of failing the request.</p>
           <h3>Fetch activity and findings</h3>
-          <CodeBlock title="Request recent wallet activity" language="curl" code={`curl 'http://localhost:8000/api/v1/wallet/activity?address=9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYinNyB&limit=20'`} />
-          <CodeBlock title="Fetch from JavaScript" language="typescript" code={`const api = "/api/v1";\nconst address = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYinNyB";\n\nconst validation = await fetch(api + "/wallet/validate", {\n  method: "POST",\n  headers: { "Content-Type": "application/json" },\n  body: JSON.stringify({ address }),\n});\nif (!validation.ok) throw new Error("Address validation failed");\n\nconst url = api + "/wallet/activity?address=" +\n  encodeURIComponent(address) + "&limit=20";\nconst activity = await fetch(url);\nif (!activity.ok) throw new Error("Activity request failed");\nconst report = await activity.json();\nconsole.log(report.items, report.findings);`} />
+          <CodeBlock title="Request recent wallet activity" language="curl" code={`curl 'http://localhost:8000/api/v1/wallet/activity?address=9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYinNyB&limit=20&network=mainnet'`} />
+          <CodeBlock title="Fetch from JavaScript" language="typescript" code={`const api = "/api/v1";\nconst address = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYinNyB";\n\nconst validation = await fetch(api + "/wallet/validate", {\n  method: "POST",\n  headers: { "Content-Type": "application/json" },\n  body: JSON.stringify({ address }),\n});\nif (!validation.ok) throw new Error("Address validation failed");\n\nconst probe = await fetch(\n  api + "/wallet/probe?address=" + encodeURIComponent(address),\n);\nif (!probe.ok) throw new Error("Network probe failed");\nconst presence = await probe.json();\n\nconst url = api + "/wallet/activity?address=" +\n  encodeURIComponent(address) + "&limit=20&network=" +\n  encodeURIComponent(presence.primary_network);\nconst activity = await fetch(url);\nif (!activity.ok) throw new Error("Activity request failed");\nconst report = await activity.json();\nconsole.log(presence.networks, report.items, report.findings);`} />
           <p className="docs-note">The example address is used to show request shape. RPC availability, address activity, and returned data depend on the configured Solana provider.</p>
         </section>
 
@@ -122,14 +125,14 @@ export default function DocsPage() {
           <div className="docs-rule-card"><div><span className="docs-rule-id">PFX-001</span><span className="docs-severity">MEDIUM</span></div><h3>High-frequency activity</h3><p>Triggers when more than five timestamped transactions occur within a 600-second window.</p><dl><div><dt>Evidence returned</dt><dd>Observed count, time bounds, supporting signatures</dd></div><div><dt>Interpretation</dt><dd>A review signal; it does not establish malicious intent.</dd></div></dl></div>
           <h3>Rule evaluation example</h3>
           <CodeBlock title="Detection logic (simplified)" language="python" code={`WINDOW_SECONDS = 600\nTHRESHOLD = 5\n\n# Transactions without timestamps are excluded.\nfor window in rolling_windows(timestamped_items, WINDOW_SECONDS):\n    if len(window) > THRESHOLD:\n        findings.append({\n            "rule_id": "PFX-001",\n            "severity": "medium",\n            "evidence": {\n                "count": len(window),\n                "signatures": [item["signature"] for item in window],\n            },\n        })`} />
-          <p className="docs-note">Severity describes a configured detection rule. Arqon does not currently return an aggregate wallet risk score or claim that an address is safe.</p>
+          <p className="docs-note">Severity describes a configured detection rule. The dashboard derives a display-only 0–100 score from finding count and severity on the client; it is not a server verdict and never claims that an address is safe.</p>
         </section>
 
         <section className="docs-section" id="privacy" data-doc-section>
           <SectionNumber number="05" label="PRIVACY & LIMITATIONS" />
           <h2>Public data only</h2>
           <p>Arqon accepts public addresses and makes read-only RPC requests. It does not request private keys, connect to a wallet, sign transactions, or write to Solana.</p>
-          <div className="docs-limit-grid"><article><b>Collected</b><p>Public address, recent signatures, transaction metadata, and SOL balance when the RPC provider returns it.</p></article><article><b>Not analyzed yet</b><p>Token transfer parsing and deeper program interaction analysis are not included in the current activity response.</p></article><article><b>No aggregate score</b><p>Current responses expose individual findings; they do not calculate a wallet-wide risk score.</p></article></div>
+          <div className="docs-limit-grid"><article><b>Collected</b><p>Public address, per-cluster balance and recent transaction presence, transaction metadata, and SOL balance when the RPC provider returns it.</p></article><article><b>Not analyzed yet</b><p>Token transfer parsing and deeper program interaction analysis are not included in the current activity response.</p></article><article><b>Client-side score</b><p>API responses expose individual findings. The 0–100 risk score shown on the dashboard is derived in the browser for display only.</p></article></div>
           <p className="docs-note">The Arqon API and configured RPC provider process requests to serve analysis. Operators may process request metadata according to their deployment and retention policies.</p>
         </section>
 
@@ -140,16 +143,18 @@ export default function DocsPage() {
           <div className="docs-endpoint"><span className="method method-get">GET</span><code>/health</code><p>Service liveness, version, and environment.</p></div>
           <div className="docs-endpoint"><span className="method method-get">GET</span><code>/system/info</code><p>Application and deployment configuration information.</p></div>
           <div className="docs-endpoint"><span className="method method-post">POST</span><code>/wallet/validate</code><p>Validate a public Solana address. Body: <code>{'{ "address": "..." }'}</code>.</p></div>
-          <div className="docs-endpoint"><span className="method method-get">GET</span><code>/wallet/activity</code><p>Recent transactions and deterministic findings. Required query: <code>address</code>; optional <code>limit</code> (1–100, default 20).</p></div>
+          <div className="docs-endpoint"><span className="method method-get">GET</span><code>/wallet/probe</code><p>Balance and recent activity per cluster, plus the preferred <code>primary_network</code>. Required query: <code>address</code>.</p></div>
+          <div className="docs-endpoint"><span className="method method-get">GET</span><code>/wallet/activity</code><p>Recent transactions and deterministic findings. Required query: <code>address</code>; optional <code>limit</code> (1–100, default 20) and <code>network</code> (mainnet, devnet, testnet).</p></div>
+          <p className="docs-note">Reports are generated from completed live activity scans in the frontend and saved in this browser. The API does not currently provide a server-side report archive.</p>
           <h3>Wallet activity response</h3>
-          <CodeBlock title="Response shape" language="json" code={`{\n  "address": "<canonical-public-key>",\n  "sol_balance_lamports": 1248000000,\n  "items": [{\n    "signature": "<transaction-signature>",\n    "slot": 301234567,\n    "block_time": 1739900000,\n    "status": "success",\n    "fee_lamports": 5000,\n    "sol_change_lamports": -25000000\n  }],\n  "findings": [{\n    "rule_id": "PFX-001",\n    "category": "high-frequency-activity",\n    "severity": "medium",\n    "description": "...",\n    "evidence": { "count": 6, "signatures": ["..."] }\n  }]\n}`} />
+          <CodeBlock title="Response shape" language="json" code={`{\n  "address": "<canonical-public-key>",\n  "network": "mainnet",\n  "sol_balance_lamports": 1248000000,\n  "items": [{\n    "signature": "<transaction-signature>",\n    "slot": 301234567,\n    "block_time": 1739900000,\n    "status": "success",\n    "fee_lamports": 5000,\n    "sol_change_lamports": -25000000\n  }],\n  "findings": [{\n    "rule_id": "PFX-001",\n    "category": "high-frequency-activity",\n    "severity": "medium",\n    "description": "...",\n    "evidence": { "count": 6, "signatures": ["..."] }\n  }]\n}`} />
           <p className="docs-note">The values above illustrate the response schema only. They do not describe an actual wallet or investigation. Lamports are the smallest SOL unit (1 SOL = 1,000,000,000 lamports).</p>
         </section>
 
         <section className="docs-section" id="responses-errors" data-doc-section>
           <SectionNumber number="07" label="RESPONSES & ERRORS" />
           <h2>Status codes</h2>
-          <div className="docs-error-list"><div><code>200</code><span>Request completed. A valid activity response can still contain empty items if the address has no recent data.</span></div><div><code>400</code><span>Invalid Solana address.</span></div><div><code>422</code><span>Request validation failed (for example, missing address or an out-of-range limit).</span></div><div><code>502</code><span>Configured RPC provider could not return activity.</span></div><div><code>500</code><span>Unexpected server error; internal details are not exposed.</span></div></div>
+          <div className="docs-error-list"><div><code>200</code><span>Request completed. A valid activity response can still contain empty items if the address has no recent data.</span></div><div><code>400</code><span>Invalid Solana address.</span></div><div><code>422</code><span>Request validation failed (for example, missing address, an out-of-range limit, or an unknown network).</span></div><div><code>502</code><span>Configured RPC provider could not return activity.</span></div><div><code>500</code><span>Unexpected server error; internal details are not exposed.</span></div></div>
           <CodeBlock title="Handle a failed API response" language="typescript" code={`const response = await fetch(url);\nif (!response.ok) {\n  const body = await response.json().catch(() => null);\n  const message = typeof body?.detail === "string"\n    ? body.detail\n    : "Request failed (" + response.status + ")";\n  throw new Error(message);\n}`} />
         </section>
 

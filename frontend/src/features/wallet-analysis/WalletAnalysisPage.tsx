@@ -141,7 +141,7 @@ function FindingCard({ finding }: { finding: WalletFinding }) {
 
 // ─── network card ─────────────────────────────────────────────────────────────
 const NETWORK_META: Record<string, { label: string; color: string; dot: string }> = {
-  mainnet: { label: "Mainnet Beta", color: "text-emerald-400", dot: "bg-emerald-400" },
+  mainnet: { label: "Mainnet Beta", color: "text-zinc-300", dot: "bg-zinc-400" },
   devnet: { label: "Devnet", color: "text-sky-400", dot: "bg-sky-400" },
   testnet: { label: "Testnet", color: "text-amber-400", dot: "bg-amber-400" },
 };
@@ -164,7 +164,7 @@ function NetworkCard({ net }: { net: NetworkProbeResult }) {
           </span>
         </div>
         {net.active ? (
-          <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
+          <span className="rounded-full border border-white/15 bg-white/[0.06] px-2 py-0.5 text-[10px] font-semibold text-zinc-300">
             Active
           </span>
         ) : net.error ? (
