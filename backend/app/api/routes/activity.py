@@ -5,6 +5,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.api.dependencies import get_solana_provider
+from app.blockchain.networks import DEFAULT_NETWORK, resolve_network_rpc_url
 from app.blockchain.providers.base import SolanaProvider, SolanaProviderError
 from app.detection.engine import detect_activity_findings
 from app.scanner.collectors.wallet_activity import (
@@ -21,9 +22,21 @@ logger = logging.getLogger(__name__)
 async def wallet_activity(
     address: str = Query(min_length=1, max_length=128),
     limit: int = Query(default=20, ge=1, le=100),
+    network: str = Query(default=DEFAULT_NETWORK, description="mainnet | devnet | testnet"),
     provider: SolanaProvider = Depends(get_solana_provider),
 ) -> WalletActivityResponse:
-    """Return recent normalized transactions and SOL balance for a public wallet address."""
+    """Return recent normalized transactions and SOL balance for a public wallet address.
+
+    Pass ``network=devnet`` or ``network=testnet`` to query those clusters instead
+    of mainnet-beta (the default).
+    """
+    network = network.strip().lower()
+    if resolve_network_rpc_url(network) is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Unknown network '{network}'. Use mainnet, devnet or testnet.",
+        )
+
     try:
         canonical_address = canonical_wallet_address(address)
     except ValueError as exc:
@@ -50,6 +63,7 @@ async def wallet_activity(
 
     return WalletActivityResponse(
         address=canonical_address,
+        network=network,
         sol_balance_lamports=sol_balance,
         items=[WalletActivityItem(**item) for item in items],
         findings=detect_activity_findings(items),

@@ -35,6 +35,7 @@ class WalletActivityResponse(BaseModel):
     """Recent activity for a public wallet address."""
 
     address: str
+    network: str = "mainnet"
     sol_balance_lamports: int | None = None
     items: list[WalletActivityItem]
     findings: list[WalletFinding] = Field(default_factory=list)

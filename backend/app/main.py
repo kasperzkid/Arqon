@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.routes.activity import router as activity_router
 from app.api.routes.health import router as health_router
+from app.api.routes.probe import router as probe_router
 from app.api.routes.system import router as system_router
 from app.api.routes.wallet import router as wallet_router
 from app.core.config import settings
@@ -60,8 +61,7 @@ def create_app() -> FastAPI:
     )
     register_exception_handlers(app)
 
-    app.include_router(health_router)
-    for router in (health_router, system_router, wallet_router, activity_router):
+    for router in (health_router, system_router, wallet_router, activity_router, probe_router):
         app.include_router(router, prefix=settings.api_v1_prefix)
 
     return app
