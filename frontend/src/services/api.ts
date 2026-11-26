@@ -68,6 +68,7 @@ export interface WalletFinding {
 
 export interface WalletActivityResponse {
   address: string;
+  network: string;
   sol_balance_lamports: number | null;
   items: WalletActivityItem[];
   findings: WalletFinding[];
@@ -76,11 +77,50 @@ export interface WalletActivityResponse {
 export async function fetchWalletActivity(
   address: string,
   limit: number = 20,
+  network: string = "mainnet",
 ): Promise<WalletActivityResponse> {
-  const url = `${BASE_URL}/wallet/activity?address=${encodeURIComponent(address.trim())}&limit=${limit}`;
+  const url = `${BASE_URL}/wallet/activity?address=${encodeURIComponent(address.trim())}&limit=${limit}&network=${encodeURIComponent(network)}`;
   const response = await fetch(url);
   if (!response.ok) {
-    throw new Error(`Failed to fetch wallet activity (${response.status})`);
+    const body = (await response.json().catch(() => null)) as { detail?: unknown } | null;
+    if (response.status === 400) {
+      throw new Error("This isn't a valid Solana address.");
+    }
+    if (response.status === 502) {
+      throw new Error("Couldn't load wallet activity from Solana right now. The address format is valid; please try again shortly.");
+    }
+    throw new Error(
+      typeof body?.detail === "string"
+        ? body.detail
+        : `Couldn't load wallet activity (HTTP ${response.status}). Please try again.`,
+    );
+  }
+  return response.json();
+}
+
+// ── Network probe ────────────────────────────────────────────────────────────
+
+export interface NetworkProbeResult {
+  network: string;
+  rpc_url: string;
+  balance_lamports: number | null;
+  balance_sol: number | null;
+  recent_tx_count: number;
+  active: boolean;
+  error: string | null;
+}
+
+export interface WalletProbeResponse {
+  address: string;
+  networks: NetworkProbeResult[];
+  primary_network: string;
+}
+
+export async function fetchWalletProbe(address: string): Promise<WalletProbeResponse> {
+  const url = `${BASE_URL}/wallet/probe?address=${encodeURIComponent(address.trim())}`;
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Probe failed (${response.status})`);
   }
   return response.json();
 }

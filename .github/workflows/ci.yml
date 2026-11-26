@@ -35,6 +35,7 @@ jobs:
         working-directory: frontend
         run: npm ci
       - name: TypeScript check
+        working-directory: frontend
         run: npx tsc -b
       - name: Build frontend
         working-directory: frontend

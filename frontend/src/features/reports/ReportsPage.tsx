@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Download,
   Calendar,
@@ -42,51 +42,6 @@ const PRESET_WALLETS = [
   { name: "Raydium", address: "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8" },
 ];
 
-const INITIAL_REPORTS: ReportItem[] = [
-  {
-    id: "rep-2026-001",
-    title: "Exchange Liquidity Sweep Verification",
-    wallet: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYinNyB",
-    generatedAt: "2026-11-24T12:00:00Z",
-    riskRating: "Clean Audit",
-    txCount: 20,
-    solBalance: null,
-    findingsCount: 0,
-    findings: [],
-    hash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    summary:
-      "Routine institutional solvency and hot wallet sweep audit. Zero unauthorized authority transfers or drainer signatures detected across sampled slots.",
-  },
-  {
-    id: "rep-2026-002",
-    title: "DEX Router Program Integrity Check",
-    wallet: "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",
-    generatedAt: "2026-11-23T18:30:00Z",
-    riskRating: "Low Risk",
-    txCount: 20,
-    solBalance: null,
-    findingsCount: 1,
-    findings: [],
-    hash: "7f83b1657ff1fc53b92dc18148a1d65dfc2d4b1fa3d677284addd200126d9069",
-    summary:
-      "Verified upgrade authority immutability. Single low-severity informational note regarding high-frequency routing activity.",
-  },
-  {
-    id: "rep-2026-003",
-    title: "Pool Authority Anomaly Audit",
-    wallet: "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",
-    generatedAt: "2026-11-22T09:15:00Z",
-    riskRating: "Clean Audit",
-    txCount: 20,
-    solBalance: null,
-    findingsCount: 0,
-    findings: [],
-    hash: "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
-    summary:
-      "Complete deterministic rule evaluation across recent program interactions. No freeze authority misuse or anomalous sweep patterns found.",
-  },
-];
-
 function RatingBadge({ rating }: { rating: ReportItem["riskRating"] }) {
   const styles: Record<ReportItem["riskRating"], string> = {
     "Clean Audit": "border-emerald-500/25 bg-emerald-500/10 text-emerald-400",
@@ -112,13 +67,30 @@ async function sha256Hex(input: string): Promise<string> {
 }
 
 export default function ReportsPage() {
-  const [reports, setReports] = useState<ReportItem[]>(INITIAL_REPORTS);
-  const [selected, setSelected] = useState<ReportItem>(INITIAL_REPORTS[0]);
+  const [reports, setReports] = useState<ReportItem[]>(() => {
+    try {
+      const stored: unknown = JSON.parse(localStorage.getItem("arqon-live-reports") ?? "[]");
+      return Array.isArray(stored)
+        ? (stored.filter((report): report is ReportItem => Boolean(report && typeof report === "object" && "live" in report && report.live === true)))
+        : [];
+    } catch {
+      return [];
+    }
+  });
+  const [selected, setSelected] = useState<ReportItem | null>(null);
   const [address, setAddress] = useState("");
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQ, setSearchQ] = useState("");
   const [copied, setCopied] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("arqon-live-reports", JSON.stringify(reports));
+    } catch {
+      // The current session can still use reports if browser storage is unavailable.
+    }
+  }, [reports]);
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -382,8 +354,16 @@ ${findingsBlock}
       <div className="grid gap-5 lg:grid-cols-5">
         {/* Report List */}
         <div className="space-y-2.5 lg:col-span-3">
-          {filtered.map((report) => {
-            const isSelected = selected.id === report.id;
+          {filtered.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-white/[0.1] bg-[#0c0c0f]/70 px-6 py-12 text-center">
+              <FileText className="mx-auto h-7 w-7 text-zinc-500" />
+              <h2 className="mt-3 text-sm font-semibold text-zinc-200">No real reports yet</h2>
+              <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-zinc-500">
+                Generate a report from a live wallet scan. Completed reports will appear here.
+              </p>
+            </div>
+          ) : filtered.map((report) => {
+            const isSelected = selected?.id === report.id;
             return (
               <button
                 key={report.id}
@@ -431,6 +411,7 @@ ${findingsBlock}
 
         {/* Report Inspector & Export */}
         <div className="lg:col-span-2">
+          {selected ? (
           <div className="sticky top-6 space-y-5 rounded-2xl border border-white/[0.08] bg-[#0c0c0f]/95 p-6">
             <div className="flex items-start justify-between gap-3 border-b border-white/[0.07] pb-4">
               <div>
@@ -576,6 +557,11 @@ ${findingsBlock}
               Open wallet in full inspector →
             </Link>
           </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-white/[0.1] bg-[#0c0c0f]/70 px-5 py-10 text-center text-xs text-zinc-500">
+              Generate a report to inspect and export its live scan results.
+            </div>
+          )}
         </div>
       </div>
     </div>

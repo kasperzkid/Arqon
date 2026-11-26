@@ -1,23 +1,19 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
-  Activity, ArrowRight, Atom, Binary, BookOpen, Check,
+  Activity, ArrowRight, Atom, BookOpen, Check,
   CheckCircle2, ChevronDown, CircleHelp, ExternalLink,
-  FileSearch, GitBranch, KeyRound, LayoutDashboard, ListChecks, LockKeyhole, Menu, Network, ScanEye, Search, ShieldAlert,
+  FileSearch, GitBranch, LayoutDashboard, ListChecks, LockKeyhole, Menu, ScanEye, Search, ShieldAlert,
   WalletCards, X,
 } from "lucide-react";
 import { GithubLogo } from "../../components/common/GithubLogo";
-import { fetchWalletActivity, validateWalletAddress, type WalletActivityItem } from "../../services/api";
+import { Meteors } from "../../components/ui/meteors";
+import { fetchWalletActivity, fetchWalletProbe, validateWalletAddress, type WalletActivityItem } from "../../services/api";
 import { CapabilitiesSection } from "./CapabilitiesSection";
+import { WorkflowBentoCards } from "./WorkflowBentoCards";
 
 const GITHUB_URL = "https://github.com/kasperzkid/Arqon";
 const DOCS_URL = "/docs";
-
-const steps = [
-  { icon: KeyRound, title: "Submit an address", text: "Enter a public Solana wallet address to begin an investigation." },
-  { icon: Binary, title: "Analyze on-chain activity", text: "Arqon collects blockchain data, parses transactions, and evaluates predefined security rules." },
-  { icon: ListChecks, title: "Review security findings", text: "Explore risk indicators, severity levels, and transaction-level evidence." },
-];
 
 const platformMetrics = [
   { value: "—", label: "Wallets analyzed", note: "Not yet aggregated", available: false },
@@ -42,7 +38,6 @@ const ecosystemLogos = [
   { name: "TypeScript", className: "logo-typescript", mark: <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#3178C6" d="M2 2h20v20H2z"/><path fill="#fff" d="M12.27 16.58c.4.65.92 1.13 1.85 1.13.78 0 1.28-.39 1.28-.93 0-.65-.51-.88-1.37-1.25l-.47-.2c-1.36-.58-2.26-1.31-2.26-2.85 0-1.42 1.08-2.5 2.77-2.5 1.2 0 2.07.42 2.69 1.53l-1.47.94c-.32-.58-.67-.81-1.22-.81s-.91.35-.91.81c0 .56.35.8 1.15 1.15l.47.2c1.6.69 2.51 1.4 2.51 2.99 0 1.71-1.34 2.65-3.14 2.65-1.76 0-2.9-.84-3.46-1.95zm-6.58.16c.3.53.57.98 1.22.98.62 0 .99-.24.99-1.17v-6.43h1.9v6.46c0 1.97-1.15 2.87-2.83 2.87-1.52 0-2.4-.78-2.85-1.72z"/></svg> },
   { name: "FastAPI", className: "logo-fastapi", mark: <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#009688"/><path fill="#fff" d="m13.52 3.8-7.1 10.04h4.54l-.5 6.36 7.12-10.04h-4.56z"/></svg> },
   { name: "Python", className: "logo-python", mark: <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#3776AB" d="M11.9 1C8.2 1 6.1 2.4 6.1 4.9v3.4h6.1v1H4.8c-2.6 0-3.8 1.8-3.8 4.8 0 3.1 1.3 4.9 3.8 4.9h2.3v-3.1c0-2.6 1.7-4.5 4.3-4.5h4.9c2.2 0 3.6-1.5 3.6-3.8V4.9C19.9 2.2 17.7 1 14 1zM8.7 3.2a1.1 1.1 0 1 1 0 2.2 1.1 1.1 0 0 1 0-2.2Z"/><path fill="#FFD43B" d="M12.1 23c3.7 0 5.8-1.4 5.8-3.9v-3.4h-6.1v-1h7.4c2.6 0 3.8-1.8 3.8-4.8 0-3.1-1.3-4.9-3.8-4.9h-2.3v3.1c0 2.6-1.7 4.5-4.3 4.5H7.7c-2.2 0-3.6 1.5-3.6 3.8v2.7c0 2.7 2.2 3.9 5.9 3.9zM15.3 20.8a1.1 1.1 0 1 1 0-2.2 1.1 1.1 0 0 1 0 2.2Z"/></svg> },
-  { name: "MIT License", className: "logo-mit", mark: <span className="ecosystem-monogram ecosystem-mit-mark">MIT</span> },
 ];
 
 function EcosystemMarquee() {
@@ -80,10 +75,14 @@ function Navbar() {
   );
 }
 
+function networkName(network: string): string {
+  return network === "devnet" ? "Devnet" : network === "testnet" ? "Testnet" : "Mainnet Beta";
+}
+
 function WalletAnalyzer() {
   const [address, setAddress] = useState("");
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ address: string; items: WalletActivityItem[]; findings: Array<{rule_id:string; severity:string; description:string}> } | null>(null);
+  const [result, setResult] = useState<{ address: string; network: string; activeNetworks: string[]; balanceLamports: number | null; items: WalletActivityItem[]; findings: Array<{rule_id:string; severity:string; description:string}> } | null>(null);
   const [error, setError] = useState("");
 
   async function analyze(event: FormEvent<HTMLFormElement>) {
@@ -93,8 +92,14 @@ function WalletAnalyzer() {
     try {
       const validation = await validateWalletAddress(address.trim());
       if (!validation.valid || !validation.address) throw new Error("This address is not a valid Solana public address.");
-      const activity = await fetchWalletActivity(validation.address, 5);
-      setResult({ address: validation.address, items: activity.items, findings: activity.findings ?? [] });
+      const probe = await fetchWalletProbe(validation.address);
+      if (probe.networks.length > 0 && probe.networks.every((network) => network.error)) {
+        throw new Error("Could not reach Solana mainnet, devnet, or testnet. Please try again.");
+      }
+      const activeNetworks = probe.networks.filter((network) => network.active).map((network) => network.network);
+      const network = probe.primary_network || "mainnet";
+      const activity = await fetchWalletActivity(validation.address, 5, network);
+      setResult({ address: validation.address, network: activity.network || network, activeNetworks, balanceLamports: activity.sol_balance_lamports, items: activity.items, findings: activity.findings ?? [] });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The analysis request could not be completed. Check the API connection and try again.");
     } finally { setLoading(false); }
@@ -110,17 +115,49 @@ function WalletAnalyzer() {
     </form>
     <div className="analyzer-foot"><span><LockKeyhole size={13} /> Read-only analysis. No wallet connection required.</span></div>
     {result && <div className="scan-result" aria-live="polite">
-      <div className="result-heading"><span className="result-status"><CheckCircle2 size={16} /> Analysis complete</span><button type="button" onClick={() => setResult(null)} aria-label="Dismiss results"><X size={16} /></button></div>
-      <p className="result-address">{result.address}</p>
-      <div className="result-summary"><span><strong>{result.items.length}</strong> recent transactions returned</span><span><strong>{result.findings.length}</strong> rule findings returned</span></div>
-      {result.findings.length > 0 ? <ul className="result-findings">{result.findings.map((finding, index) => <li key={`${finding.rule_id}-${index}`}><span className="rule-tag">{finding.rule_id}</span><span>{finding.description}</span><b>{finding.severity}</b></li>)}</ul> : <p className="result-note">No findings were returned for this activity sample. This is not a guarantee of wallet safety.</p>}
-      <Link to="/wallet-analysis" className="result-link">Open wallet analysis <ArrowRight size={14} /></Link>
+      <div className="result-heading">
+        <span className="result-status"><CheckCircle2 size={16} /> Scan complete</span>
+        <span className="result-network-badge"><i /> {networkName(result.network)}</span>
+        <button type="button" onClick={() => setResult(null)} aria-label="Dismiss results"><X size={16} /></button>
+      </div>
+      <div className="result-wallet">
+        <span className="result-eyebrow">WALLET</span>
+        <p className="result-address">{result.address}</p>
+      </div>
+      {result.activeNetworks.length > 1 && <p className="result-network-extra">Also active on {result.activeNetworks.filter((network) => network !== result.network).map(networkName).join(", ")}</p>}
+      <div className="result-stat-grid">
+        <div className="result-stat"><strong>{result.balanceLamports == null ? "—" : (result.balanceLamports / 1e9).toFixed(4)}</strong><span>SOL BALANCE</span></div>
+        <div className="result-stat"><strong>{result.items.length}</strong><span>TRANSACTIONS</span></div>
+        <div className="result-stat"><strong>{result.findings.length}</strong><span>RULE FINDINGS</span></div>
+      </div>
+      {result.items.length > 0 && <div className="result-transactions">
+        <div className="result-transactions-heading"><span>RECENT TRANSACTIONS</span><span>{result.items.length} shown</span></div>
+        {result.items.map((tx) => {
+          const explorerUrl = `https://explorer.solana.com/tx/${tx.signature}${result.network === "mainnet" ? "" : `?cluster=${encodeURIComponent(result.network)}`}`;
+          const solChange = tx.sol_change_lamports == null ? null : tx.sol_change_lamports / 1e9;
+          return <div className="result-transaction" key={tx.signature}>
+            <div className="result-transaction-main">
+              <span className={`result-transaction-dot ${tx.status === "confirmed" ? "is-confirmed" : tx.status === "failed" ? "is-failed" : ""}`} />
+              <div className="result-transaction-id"><a href={explorerUrl} target="_blank" rel="noreferrer">{tx.signature.slice(0, 12)}…{tx.signature.slice(-8)} <ExternalLink size={10}/></a><small>{tx.block_time ? new Date(tx.block_time * 1000).toLocaleString() : "Time unavailable"}</small></div>
+            </div>
+            <div className="result-transaction-meta"><span className={`result-transaction-status ${tx.status === "failed" ? "is-failed" : ""}`}>{tx.status}</span><b className={solChange == null ? "" : solChange >= 0 ? "is-positive" : "is-negative"}>{solChange == null ? "—" : `${solChange > 0 ? "+" : ""}${solChange.toFixed(4)} SOL`}</b></div>
+          </div>;
+        })}
+      </div>}
+      {result.items.length === 0 ? (
+        <div className="result-empty"><span className="result-empty-title">No recent transactions found</span><p>No activity was returned from {networkName(result.network)}.</p></div>
+      ) : result.findings.length > 0 ? (
+        <ul className="result-findings">{result.findings.map((finding, index) => <li key={`${finding.rule_id}-${index}`}><span className="rule-tag">{finding.rule_id}</span><span>{finding.description}</span><b>{finding.severity}</b></li>)}</ul>
+      ) : (
+        <div className="result-empty"><span className="result-empty-title"><CheckCircle2 size={15} /> No rule matches in this sample</span><p>{result.items.length} recent transactions checked · This is not a full wallet safety assessment.</p></div>
+      )}
+      <Link to="/wallet-analysis" className="result-link"><span style={{ color: "#111" }}>Open wallet analysis</span><ArrowRight size={14} color="#111" /></Link>
     </div>}
   </div>;
 }
 
-function SectionHeading({ eyebrow, title, text, centered = false }: { eyebrow: string; title: string; text?: string; centered?: boolean }) {
-  return <div className={`section-heading ${centered ? "section-heading-center" : ""}`}><span className="eyebrow"><i />{eyebrow}</span><h2>{title}</h2>{text && <p>{text}</p>}</div>;
+function SectionHeading({ eyebrow, title, text, centered = false }: { eyebrow?: string; title: string; text?: string; centered?: boolean }) {
+  return <div className={`section-heading ${centered ? "section-heading-center" : ""}`}>{eyebrow && <span className="eyebrow"><i />{eyebrow}</span>}<h2>{title}</h2>{text && <p>{text}</p>}</div>;
 }
 
 function SampleReport() {
@@ -142,7 +179,7 @@ function SampleReport() {
       <div className="scanner-main-grid">
         <section className="scanner-panel scanner-activity-panel">
           <div className="scanner-panel-head"><div><span>ON-CHAIN ACTIVITY</span><h4>Transaction activity</h4></div><span className="scanner-period">SAMPLE WINDOW <ChevronDown size={13}/></span></div>
-          <div className="scanner-chart"><div className="scanner-chart-grid"/><svg viewBox="0 0 640 150" role="img" aria-label="Illustrative wallet activity over time"><defs><linearGradient id="scannerChartFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#d7e477" stopOpacity=".18"/><stop offset="1" stopColor="#d7e477" stopOpacity="0"/></linearGradient></defs><path className="scanner-chart-area" d="M0 117 C45 111 53 78 94 88 S143 106 185 64 S232 89 280 57 S341 78 387 40 S434 69 476 45 S541 60 575 28 S618 44 640 19 L640 150 L0 150Z"/><path className="scanner-chart-line" d="M0 117 C45 111 53 78 94 88 S143 106 185 64 S232 89 280 57 S341 78 387 40 S434 69 476 45 S541 60 575 28 S618 44 640 19"/></svg></div>
+          <div className="scanner-chart"><div className="scanner-chart-grid"/><svg viewBox="0 0 640 150" role="img" aria-label="Illustrative wallet activity over time"><defs><linearGradient id="scannerChartFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#e4e4e7" stopOpacity=".18"/><stop offset="1" stopColor="#e4e4e7" stopOpacity="0"/></linearGradient></defs><path className="scanner-chart-area" d="M0 117 C45 111 53 78 94 88 S143 106 185 64 S232 89 280 57 S341 78 387 40 S434 69 476 45 S541 60 575 28 S618 44 640 19 L640 150 L0 150Z"/><path className="scanner-chart-line" d="M0 117 C45 111 53 78 94 88 S143 106 185 64 S232 89 280 57 S341 78 387 40 S434 69 476 45 S541 60 575 28 S618 44 640 19"/></svg></div>
           <div className="scanner-chart-labels"><span>MAR 12</span><span>JUN 04</span><span>SEP 21</span><span>FEB 18</span></div>
           <div className="scanner-activity-legend"><span><i/> Incoming activity</span><span><i/> Outgoing activity</span><small>ILLUSTRATIVE CHART</small></div>
           <div className="scanner-observed"><span>FIRST OBSERVED <b>2024-03-12 09:14 UTC</b></span><span>LAST OBSERVED <b>2025-02-18 16:42 UTC</b></span></div>
@@ -203,6 +240,7 @@ function FooterLink({ href, children, external = false }: { href: string; childr
 
 export default function LandingPage() {
   return <div className="landing-page" id="top">
+    <div className="meteors-bg" aria-hidden="true"><Meteors number={48} angle={220} /></div>
     <Navbar />
     <main>
       <section className="hero-section">
@@ -211,11 +249,14 @@ export default function LandingPage() {
         <div className="hero-facets" aria-hidden="true"><i/><i/><i/><i/><i/><i/><i/><i/></div>
         <div className="hero-content">
           <div className="hero-title-block">
-            <h1>Advanced <span>Solana</span><br/><span>security</span> intelligence</h1>
+            <h1>Every transaction<br/><span>Tells a story.</span></h1>
           </div>
           <div className="hero-action-block">
             <p className="hero-description">Arqon analyzes Solana wallets, transactions, and program interactions to identify suspicious activity and deliver transparent, evidence-backed security insights.</p>
-            <Link className="button button-quiet hero-read-docs" to={DOCS_URL}>Read Docs <ArrowRight size={16}/></Link>
+            <div className="hero-actions">
+              <a className="button button-primary" href={GITHUB_URL} target="_blank" rel="noreferrer"><GithubLogo size={15}/> Explore on GitHub</a>
+              <Link className="button button-quiet hero-read-docs" to={DOCS_URL}><BookOpen size={15}/> Read the docs</Link>
+            </div>
           </div>
         </div>
         <div className="hero-trust-strip" aria-label="Arqon technology and project principles">
@@ -244,23 +285,46 @@ export default function LandingPage() {
 
       <CapabilitiesSection />
 
-      <section className="content-section workflow-section" id="how-it-works"><SectionHeading eyebrow="INVESTIGATION WORKFLOW" title="From address to investigation." text="A clear path from public key to evidence you can inspect." />
-        <div className="workflow-track">
-          {steps.map(({ icon: Icon, title, text }, index) => <article className={`workflow-step workflow-step-${index + 1}`} key={title}>
-            <div className="workflow-step-head"><span className="step-number">0{index + 1}</span><span className="workflow-stage">{["INPUT", "PROCESS", "OUTPUT"][index]}</span><span className="step-icon"><Icon size={19}/></span></div>
-            <h3>{title}</h3><p>{text}</p>
-            {index === 0 && <div className="workflow-visual address-visual"><div className="visual-label">INVESTIGATION INPUT</div><div className="address-preview"><KeyRound size={15}/><span>Public Solana address</span><span className="address-caret"/></div><div className="visual-caption"><LockKeyhole size={12}/> Address only · No signing request</div></div>}
-            {index === 1 && <div className="workflow-visual process-visual"><div className="visual-label">READ-ONLY ANALYSIS PIPELINE</div><div className="pipeline-step"><span className="pipeline-icon"><Network size={14}/></span><span><b>Solana RPC</b><small>Fetch recent activity</small></span><span className="pipeline-index">01</span></div><div className="pipeline-step"><span className="pipeline-icon"><Binary size={14}/></span><span><b>Transaction parser</b><small>Normalize signatures & balance changes</small></span><span className="pipeline-index">02</span></div><div className="pipeline-step"><span className="pipeline-icon"><ScanEye size={14}/></span><span><b>Deterministic rules</b><small>Evaluate configured checks</small></span><span className="pipeline-index">03</span></div></div>}
-            {index === 2 && <div className="workflow-visual evidence-visual"><div className="visual-label">RULE OUTPUT · SCHEMA PREVIEW</div><div className="evidence-record"><div><span>RULE ID</span><b>PFX-001</b></div><div><span>SEVERITY</span><b className="severity-medium-text">Medium</b></div><div><span>SUPPORT</span><b>Transaction signatures</b></div></div><div className="visual-caption"><FileSearch size={12}/> Example fields, not a live scan</div></div>}
-            {index < 2 && <span className="route-connector" aria-hidden="true" />}
-          </article>)}
-        </div>
+      <section className="content-section workflow-section" id="how-it-works"><SectionHeading title="From address to investigation." text="A clear path from public key to evidence you can inspect." />
+        <WorkflowBentoCards />
       </section>
 
-      <section className="content-section report-section"><div className="report-intro"><SectionHeading eyebrow="EVIDENCE-LED REPORTING" title="Every finding has evidence." text="Explore transparent security reports that explain suspicious activity and show exactly why an indicator was triggered."/><div className="report-points"><p><span><Check size={14}/></span> Trace findings to specific rule IDs</p><p><span><Check size={14}/></span> Review supporting transaction evidence</p><p><span><Check size={14}/></span> Understand severity and context</p></div></div><SampleReport /></section>
+      <section className="content-section report-section"><div className="report-intro"><SectionHeading title="Every finding has evidence." text="Explore transparent security reports that explain suspicious activity and show exactly why an indicator was triggered."/><div className="report-points"><p><span><Check size={14}/></span> Trace findings to specific rule IDs</p><p><span><Check size={14}/></span> Review supporting transaction evidence</p><p><span><Check size={14}/></span> Understand severity and context</p></div></div><SampleReport /></section>
 
-      <section className="content-section detection-section" id="detection"><div className="detection-copy"><SectionHeading eyebrow="EXPLAINABLE BY DESIGN" title="Every finding has a reason." text="Arqon uses deterministic rules, traceable transaction evidence, and explicit severity classifications. The current backend does not calculate an aggregate risk score."/><Link className="text-link" to="/security-findings">Explore detection findings <ArrowRight size={15}/></Link></div>
-        <div className="detection-stack"><article><span className="detection-icon"><ScanEye size={18}/></span><div><h3>Deterministic rules</h3><p>Each detection follows a predefined rule with a visible identifier. No AI-generated conclusions.</p></div><span className="detection-code">RULE ENGINE / 01</span></article><article><span className="detection-icon"><FileSearch size={18}/></span><div><h3>Traceable evidence</h3><p>Findings can include transaction signatures, observed time windows, and source data.</p></div><span className="detection-code">EVIDENCE / 02</span></article><article><span className="detection-icon"><ListChecks size={18}/></span><div><h3>Transparent severity</h3><p>Severity is attached to configured rules. Aggregate risk scoring is not yet available.</p></div><span className="detection-code">ASSESSMENT / 03</span></article></div>
+      <section className="xd-section" id="detection">
+        <div className="xd-intro">
+          <SectionHeading eyebrow="EXPLAINABLE BY DESIGN" title="No black boxes." text="Every finding traces back to a named rule, real transaction evidence, and an explicit severity level — not an opaque score."/>
+          <Link className="detection-cta" to="/security-findings"><span className="detection-cta-inner">Explore detection findings <ArrowRight size={14}/></span></Link>
+        </div>
+        <div className="xd-cards">
+          <article className="xd-card">
+            <div className="xd-card-header">
+              <span className="xd-tag">RULE ENGINE</span>
+              <span className="xd-num">01</span>
+            </div>
+            <div className="xd-icon-wrap"><ScanEye size={20}/></div>
+            <h3 className="xd-title">Deterministic rules</h3>
+            <p className="xd-desc">Every detection follows a named, versioned rule. The identifier is always visible — no AI inference, no hidden logic.</p>
+          </article>
+          <article className="xd-card">
+            <div className="xd-card-header">
+              <span className="xd-tag">EVIDENCE</span>
+              <span className="xd-num">02</span>
+            </div>
+            <div className="xd-icon-wrap"><FileSearch size={20}/></div>
+            <h3 className="xd-title">Traceable evidence</h3>
+            <p className="xd-desc">Findings attach directly to transaction signatures, observed time windows, and the raw data that triggered them.</p>
+          </article>
+          <article className="xd-card">
+            <div className="xd-card-header">
+              <span className="xd-tag">ASSESSMENT</span>
+              <span className="xd-num">03</span>
+            </div>
+            <div className="xd-icon-wrap"><ListChecks size={20}/></div>
+            <h3 className="xd-title">Explicit severity</h3>
+            <p className="xd-desc">Severity is set on the rule, not inferred. No aggregate risk score is surfaced until the backend can support it reliably.</p>
+          </article>
+        </div>
       </section>
 
       <section className="open-source-section" id="open-source"><div className="opensource-glow"/><div className="opensource-copy"><h2>Security belongs<br/>in the open.</h2><p>Arqon is an open-source project. Inspect the code, review detection rules, contribute intelligence, and help improve blockchain security.</p><div className="opensource-actions"><a className="button button-primary" href={GITHUB_URL} target="_blank" rel="noreferrer">Explore on GitHub <ArrowRight size={15}/></a><Link className="button button-quiet" to={DOCS_URL}><BookOpen size={15}/> Read the docs</Link></div></div><TerminalPreview /></section>

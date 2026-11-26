@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import {
   Activity,
   ArrowRight,
@@ -9,6 +9,9 @@ import {
   Check,
   ExternalLink,
   FileClock,
+  Globe,
+  Layers,
+  RefreshCw,
   Search,
   ScanSearch,
   ShieldAlert,
@@ -19,11 +22,26 @@ import {
   Zap,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import {
-  validateWalletAddress,
-  fetchWalletActivity,
-  type WalletActivityResponse,
-} from "../../services/api";
+import { useWalletAnalysis } from "../wallet-analysis/WalletAnalysisProvider";
+
+const NETWORK_META: Record<string, { label: string; dot: string; text: string }> = {
+  mainnet: { label: "Mainnet Beta", dot: "bg-emerald-400", text: "text-emerald-300" },
+  devnet: { label: "Devnet", dot: "bg-sky-400", text: "text-sky-300" },
+  testnet: { label: "Testnet", dot: "bg-amber-400", text: "text-amber-300" },
+};
+
+function networkLabel(network: string | undefined): string {
+  return NETWORK_META[network?.toLowerCase() ?? ""]?.label ?? network ?? "Unknown network";
+}
+
+function truncAddress(address: string, head = 10, tail = 8): string {
+  if (address.length <= head + tail + 3) return address;
+  return `${address.slice(0, head)}…${address.slice(-tail)}`;
+}
+
+function formatTime(ts: number): string {
+  return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
 
 function Panel({
   children,
@@ -34,10 +52,37 @@ function Panel({
 }) {
   return (
     <section
-      className={`rounded-2xl border border-white/[0.07] bg-[#0c0c0f]/95 p-5 shadow-[0_18px_50px_rgba(0,0,0,0.3)] ${className}`}
+      className={`rounded-2xl border border-white/[0.07] bg-[#0b0b0e]/85 p-5 shadow-[0_24px_70px_-30px_rgba(0,0,0,0.9)] backdrop-blur-sm transition-colors hover:border-white/[0.11] ${className}`}
     >
       {children}
     </section>
+  );
+}
+
+function PanelHeader({
+  icon,
+  title,
+  subtitle,
+  action,
+}: {
+  icon: ReactNode;
+  title: string;
+  subtitle?: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start gap-2.5">
+        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-zinc-400">
+          {icon}
+        </span>
+        <div>
+          <h2 className="text-sm font-semibold text-zinc-100">{title}</h2>
+          {subtitle && <p className="mt-0.5 text-[11px] text-zinc-500">{subtitle}</p>}
+        </div>
+      </div>
+      {action}
+    </div>
   );
 }
 
@@ -58,39 +103,41 @@ function SeverityBadge({ severity }: { severity: string }) {
   );
 }
 
-function StatCard({
+function KpiCard({
   icon,
   label,
   value,
   sub,
-  accent = false,
+  tone = "neutral",
 }: {
   icon: ReactNode;
   label: string;
   value: string | number;
-  sub?: string;
-  accent?: boolean;
+  sub: string;
+  tone?: "neutral" | "positive" | "warning" | "danger";
 }) {
+  const tones = {
+    neutral: "bg-white/[0.05] text-zinc-300",
+    positive: "bg-emerald-500/10 text-emerald-400",
+    warning: "bg-amber-500/10 text-amber-400",
+    danger: "bg-rose-500/10 text-rose-400",
+  } as const;
+
   return (
-    <div
-      className={`relative min-h-36 overflow-hidden rounded-xl border p-4 ${
-        accent
-          ? "border-white/15 bg-gradient-to-br from-[#16161a] to-[#101013]"
-          : "border-white/[0.05] bg-[#111114]"
-      }`}
-    >
-      <div className="flex items-center gap-3">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.07] text-zinc-200">
+    <div className="group relative overflow-hidden rounded-2xl border border-white/[0.06] bg-[#0c0c0f] p-4 transition hover:border-white/[0.13]">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] font-medium uppercase tracking-[0.16em] text-zinc-500">
+          {label}
+        </span>
+        <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${tones[tone]}`}>
           {icon}
         </span>
-        <div>
-          <p className="text-xs text-zinc-400">{label}</p>
-          <p className="mt-1 text-2xl font-semibold text-white">{value}</p>
-        </div>
       </div>
-      {sub && <p className="absolute bottom-3 left-4 text-[11px] text-zinc-500">{sub}</p>}
-      <div className="pointer-events-none absolute -bottom-16 right-3 h-36 w-36 rounded-full border border-white/[0.05]" />
-      <div className="pointer-events-none absolute -bottom-12 right-7 h-28 w-28 rounded-full border border-white/[0.05]" />
+      <p className="mt-3 truncate font-mono text-xl font-semibold tracking-tight text-zinc-50 sm:text-2xl">
+        {value}
+      </p>
+      <p className="mt-0.5 truncate text-[11px] text-zinc-500">{sub}</p>
+      <div className="pointer-events-none absolute -bottom-12 -right-8 h-24 w-24 rounded-full bg-white/[0.025] blur-2xl" />
     </div>
   );
 }
@@ -190,43 +237,57 @@ function RiskGauge({ score }: { score: number | null }) {
   );
 }
 
+type ScanHistoryEntry = {
+  address: string;
+  network: string;
+  txCount: number;
+  findings: number;
+  ts: number;
+};
+
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const [quickAddress, setQuickAddress] = useState("");
-  const [scanning, setScanning] = useState(false);
-  const [scanResult, setScanResult] = useState<WalletActivityResponse | null>(null);
-  const [scanError, setScanError] = useState<string | null>(null);
+  // Shares the analysis state with the Wallet Analysis page, so the most
+  // recently analyzed wallet is always reflected here.
+  const { analysis, running, error, analyze } = useWalletAnalysis();
+  const [quickAddress, setQuickAddress] = useState(analysis?.address ?? "");
   const [copiedText, setCopiedText] = useState<string | null>(null);
-  const [recentScans, setRecentScans] = useState<
-    Array<{ address: string; txCount: number; findings: number; ts: number }>
-  >([]);
+  const [recentScans, setRecentScans] = useState<ScanHistoryEntry[]>([]);
+
+  const scanResult = analysis?.activity ?? null;
+  const scanProbe = analysis?.probe ?? null;
+  const scanning = running;
+  const scanError = error;
+
+  // Keep the session history in sync with analyses performed anywhere in the app.
+  useEffect(() => {
+    if (!analysis) return;
+    setRecentScans((prev) => {
+      const entry: ScanHistoryEntry = {
+        address: analysis.address,
+        network: analysis.network,
+        txCount: analysis.activity.items.length,
+        findings: analysis.activity.findings.length,
+        ts: analysis.analyzedAt,
+      };
+      if (prev[0]?.address === entry.address && prev[0]?.ts === entry.ts) return prev;
+      return [entry, ...prev.filter((scan) => scan.address !== entry.address)].slice(0, 5);
+    });
+  }, [analysis]);
 
   const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedText(text);
-    setTimeout(() => setCopiedText(null), 2000);
+    void navigator.clipboard.writeText(text).then(() => {
+      setCopiedText(text);
+      setTimeout(() => setCopiedText(null), 2000);
+    });
   };
 
   async function handleQuickScan(e: React.FormEvent) {
     e.preventDefault();
     const addr = quickAddress.trim();
     if (!addr) return;
-    setScanning(true);
-    setScanError(null);
-    setScanResult(null);
-    try {
-      await validateWalletAddress(addr);
-      const result = await fetchWalletActivity(addr, 20);
-      setScanResult(result);
-      setRecentScans((prev) => [
-        { address: addr, txCount: result.items.length, findings: result.findings.length, ts: Date.now() },
-        ...prev.slice(0, 4),
-      ]);
-    } catch (err) {
-      setScanError(err instanceof Error ? err.message : "Scan failed");
-    } finally {
-      setScanning(false);
-    }
+    const result = await analyze(addr, { limit: 20 });
+    if (result) setQuickAddress(result.address);
   }
 
   const riskScore = scanResult
@@ -240,37 +301,173 @@ export default function DashboardPage() {
       ? (scanResult.sol_balance_lamports / 1e9).toFixed(4)
       : null;
 
+  const highRisk = scanResult?.findings.filter(
+    (f) => f.severity === "critical" || f.severity === "high",
+  ).length ?? 0;
+
+  const activeNetworks = scanProbe?.networks.filter((network) => network.active).length ?? 0;
+  const totalNetworks = scanProbe?.networks.length ?? 0;
+
+  const confirmedCount = scanResult?.items.filter((tx) => tx.status === "confirmed").length ?? 0;
+  const failedCount = scanResult?.items.filter((tx) => tx.status === "failed").length ?? 0;
+  const safeTx = totalTx || 1;
+
   return (
-    <div className="space-y-4 pb-6">
-      {/* Top row */}
+    <div className="flex flex-col gap-5 pb-6">
+      {/* ── Page header ── */}
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-zinc-500">
+            Overview
+          </p>
+          <h1 className="mt-1 text-xl font-semibold tracking-tight text-white sm:text-2xl">
+            Dashboard
+          </h1>
+          <p className="mt-1 max-w-xl text-xs text-zinc-500">
+            Live risk posture for the most recent wallet scan — balances, activity and
+            rule-based findings in one place.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[10px] font-medium uppercase tracking-wider ${
+              scanning
+                ? "border-amber-500/25 bg-amber-500/10 text-amber-300"
+                : scanResult
+                  ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300"
+                  : "border-white/10 bg-white/[0.04] text-zinc-400"
+            }`}
+          >
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${
+                scanning ? "animate-pulse bg-amber-400" : scanResult ? "bg-emerald-400" : "bg-zinc-600"
+              }`}
+            />
+          </span>
+          <Link
+            to="/wallet-analysis"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3.5 py-2 text-xs font-semibold text-[#09090b] transition hover:bg-zinc-200"
+          >
+            <ScanSearch className="h-3.5 w-3.5" /> New scan
+          </Link>
+        </div>
+      </div>
+
+      {/* ── KPI strip ── */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <KpiCard
+          icon={<Wallet className="h-4 w-4" />}
+          label="SOL balance"
+          value={scanning ? "…" : solBalance ?? "—"}
+          sub={scanResult ? networkLabel(scanResult.network) : "No wallet selected"}
+        />
+        <KpiCard
+          icon={<Activity className="h-4 w-4" />}
+          label="Transactions"
+          value={scanning ? "…" : totalTx}
+          sub={scanResult ? "in the fetched window" : "Scan a wallet to populate"}
+        />
+        <KpiCard
+          icon={<ShieldAlert className="h-4 w-4" />}
+          label="Findings"
+          value={scanning ? "…" : totalFindings}
+          sub={
+            scanResult
+              ? highRisk > 0
+                ? `${highRisk} high severity`
+                : "No high severity"
+              : "Appear after a scan"
+          }
+          tone={highRisk > 0 ? "danger" : totalFindings > 0 ? "warning" : "neutral"}
+        />
+        <KpiCard
+          icon={<Globe className="h-4 w-4" />}
+          label="Active networks"
+          value={scanning ? "…" : scanProbe ? `${activeNetworks}/${totalNetworks}` : "—"}
+          sub={scanProbe ? "Detected across clusters" : "Network probe not run"}
+        />
+      </div>
+
+      {/* ── Scan + risk ── */}
       <div className="grid gap-4 xl:grid-cols-12">
         {/* Quick scan panel */}
         <Panel className="xl:col-span-7">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-[0.16em] text-zinc-500">
-                {scanResult ? "Scanned wallet" : "Selected wallet"}
+          <PanelHeader
+            icon={<Zap className="h-4 w-4" />}
+            title="Quick scan"
+            subtitle="Read-only analysis of any public Solana address"
+            action={
+              <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider text-zinc-300">
+                {scanResult ? networkLabel(scanResult.network) : "Network detected on scan"}
+              </span>
+            }
+          />
+
+          {/* Selected wallet */}
+          <div className="mt-4 rounded-xl border border-white/[0.06] bg-[#101013] p-4">
+            <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-zinc-500">
+              {scanResult ? "Scanned wallet" : "Selected wallet"}
+            </p>
+            {scanResult ? (
+              <div className="mt-2 flex items-center gap-2">
+                <span className="font-mono text-sm text-zinc-200 break-all">
+                  {truncAddress(scanResult.address, 20, 8)}
+                </span>
+                <button
+                  onClick={() => handleCopy(scanResult.address)}
+                  aria-label="Copy wallet address"
+                  className="shrink-0 text-zinc-600 transition hover:text-zinc-200"
+                >
+                  {copiedText === scanResult.address ? (
+                    <Check className="h-3.5 w-3.5 text-emerald-400" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5" />
+                  )}
+                </button>
+                <a
+                  href={`https://solscan.io/account/${scanResult.address}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label="View on Solscan"
+                  className="shrink-0 text-zinc-600 transition hover:text-zinc-200"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              </div>
+            ) : (
+              <p className="mt-1.5 text-sm text-zinc-400">
+                No wallet selected — start a read-only scan below.
               </p>
-              <h1 className="mt-2 text-xl font-semibold tracking-tight text-white">
-                {scanResult ? (
-                  <span className="font-mono text-sm text-zinc-200 break-all">
-                    {scanResult.address.slice(0, 20)}…{scanResult.address.slice(-8)}
-                  </span>
+            )}
+
+            {scanProbe && (
+              <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[10px] text-zinc-500">
+                <span className="mr-1">Clusters:</span>
+                {scanProbe.networks.filter((network) => network.active).length > 0 ? (
+                  scanProbe.networks
+                    .filter((network) => network.active)
+                    .map((network) => {
+                      const meta = NETWORK_META[network.network];
+                      return (
+                        <span
+                          key={network.network}
+                          className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-2 py-1 text-zinc-300"
+                        >
+                          <span className={`h-1.5 w-1.5 rounded-full ${meta?.dot ?? "bg-zinc-500"}`} />
+                          {networkLabel(network.network)}
+                          <span className="text-zinc-500">· {network.recent_tx_count} tx</span>
+                        </span>
+                      );
+                    })
                 ) : (
-                  "No wallet selected"
+                  <span>No balance or recent activity on any cluster</span>
                 )}
-              </h1>
-              {!scanResult && (
-                <p className="mt-1 text-sm text-zinc-400">Start a read-only scan below.</p>
-              )}
-            </div>
-            <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider text-zinc-400">
-              Solana mainnet
-            </span>
+              </div>
+            )}
           </div>
 
           {/* Quick scan input */}
-          <form onSubmit={handleQuickScan} className="mt-5">
+          <form onSubmit={handleQuickScan} className="mt-4">
             <div className="flex flex-col gap-2 sm:flex-row">
               <label className="relative flex-1">
                 <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
@@ -284,46 +481,27 @@ export default function DashboardPage() {
               <button
                 type="submit"
                 disabled={scanning || !quickAddress.trim()}
-                className="inline-flex h-10 items-center gap-2 rounded-lg bg-white px-5 text-xs font-semibold text-[#09090b] transition hover:bg-zinc-200 disabled:opacity-40"
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-white px-5 text-xs font-semibold text-[#09090b] transition hover:bg-zinc-200 disabled:opacity-40"
               >
                 {scanning ? (
-                  <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#09090b] border-t-transparent" />
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
                 ) : (
                   <Zap className="h-3.5 w-3.5" />
                 )}
                 {scanning ? "Scanning…" : "Quick Scan"}
               </button>
             </div>
-            {scanError && (
-              <p className="mt-2 text-[11px] text-rose-400">{scanError}</p>
-            )}
+            {scanError && <p className="mt-2 text-[11px] text-rose-400">{scanError}</p>}
           </form>
 
-          {/* Stats */}
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            <StatCard
-              icon={<ScanSearch className="h-5 w-5" />}
-              label="Transactions found"
-              value={scanResult ? totalTx : "—"}
-              sub={scanResult ? `in last 20 fetched` : "No scan history yet"}
-              accent={!!scanResult}
-            />
-            <StatCard
-              icon={<ShieldAlert className="h-5 w-5" />}
-              label="Rule findings"
-              value={scanResult ? totalFindings : "—"}
-              sub={scanResult ? (totalFindings > 0 ? "Review below" : "No anomalies detected") : "Findings appear after a scan"}
-            />
-          </div>
-
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-white/10 px-4 py-3">
-            <div className="flex items-center gap-2 text-xs text-zinc-400">
-              <ShieldCheck className="h-4 w-4 text-emerald-400" />
+            <div className="flex items-center gap-2 text-[11px] text-zinc-400">
+              <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-400" />
               Public-address analysis only. Arqon never asks for a private key.
             </div>
             <Link
-              to="/wallet-analysis"
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-200 hover:text-white"
+              to={scanResult ? `/wallet-analysis?address=${encodeURIComponent(scanResult.address)}` : "/wallet-analysis"}
+              className="inline-flex items-center gap-1.5 text-[11px] font-medium text-zinc-200 transition hover:text-white"
             >
               Full analysis <ArrowRight className="h-3.5 w-3.5" />
             </Link>
@@ -332,76 +510,105 @@ export default function DashboardPage() {
 
         {/* Risk gauge */}
         <Panel className="relative flex min-h-[300px] flex-col overflow-hidden xl:col-span-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-[0.16em] text-zinc-500">
-                Risk score
-              </p>
-              <h2 className="mt-1 text-lg font-semibold text-white">Wallet overview</h2>
-            </div>
-            {solBalance && (
-              <span className="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.05] px-3 py-1 text-xs font-mono text-zinc-200">
-                <Wallet className="h-3 w-3" />
-                {solBalance} SOL
-              </span>
-            )}
-          </div>
+          <PanelHeader
+            icon={<ShieldCheck className="h-4 w-4" />}
+            title="Wallet overview"
+            subtitle="Composite risk from rule-based findings"
+            action={
+              solBalance && (
+                <span className="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-1 font-mono text-[11px] text-zinc-200">
+                  <Wallet className="h-3 w-3" />
+                  {solBalance} SOL
+                </span>
+              )
+            }
+          />
 
           <RiskGauge score={riskScore} />
 
           {scanResult && riskScore !== null && (
-            <div className="mt-3 flex items-center justify-center gap-2">
-              <CheckCircle2
-                className={`h-4 w-4 ${riskScore < 30 ? "text-emerald-400" : riskScore < 60 ? "text-amber-400" : "text-rose-400"}`}
-              />
-              <span
-                className={`text-xs font-semibold ${riskScore < 30 ? "text-emerald-400" : riskScore < 60 ? "text-amber-400" : "text-rose-400"}`}
-              >
-                {riskScore < 30 ? "LOW RISK" : riskScore < 60 ? "MEDIUM RISK" : "HIGH RISK"}
-              </span>
+            <div className="mt-2 flex flex-col items-center gap-1.5">
+              <div className="flex items-center gap-2">
+                <CheckCircle2
+                  className={`h-4 w-4 ${riskScore < 30 ? "text-emerald-400" : riskScore < 60 ? "text-amber-400" : "text-rose-400"}`}
+                />
+                <span
+                  className={`text-xs font-semibold tracking-wide ${riskScore < 30 ? "text-emerald-400" : riskScore < 60 ? "text-amber-400" : "text-rose-400"}`}
+                >
+                  {riskScore < 30 ? "LOW RISK" : riskScore < 60 ? "MEDIUM RISK" : "HIGH RISK"}
+                </span>
+              </div>
+              <p className="text-center text-[11px] text-zinc-500">
+                {totalFindings} finding{totalFindings === 1 ? "" : "s"} across the scanned window
+              </p>
             </div>
           )}
 
-          <p className="mt-auto pt-3 text-xs leading-relaxed text-zinc-400">
+          <p className="mt-auto pt-4 text-[11px] leading-relaxed text-zinc-500">
             {scanResult
-              ? "Score derived from rule-based findings on the scanned wallet."
+              ? "Scores are derived from deterministic rules applied to the fetched on-chain activity."
               : "Risk scores are calculated from rule-based evidence after a wallet is scanned."}
           </p>
         </Panel>
       </div>
 
-      {/* Second row */}
+      {/* ── Transactions + alerts ── */}
       <div className="grid gap-4 xl:grid-cols-12">
-        <div className="space-y-4 xl:col-span-6">
-          {/* Recent transactions preview */}
-          <Panel className="min-h-[310px]">
-            <div className="flex items-start justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-white">Recent transactions</h2>
-                <p className="mt-1 text-xs text-zinc-500">
-                  {scanResult ? `Showing ${Math.min(5, totalTx)} of ${totalTx}` : "Scan a wallet to populate"}
-                </p>
-              </div>
-              <Activity className="h-4 w-4 text-zinc-400" />
-            </div>
+        {/* Recent transactions preview */}
+        <Panel className="xl:col-span-7">
+          <PanelHeader
+            icon={<Layers className="h-4 w-4" />}
+            title="Recent transactions"
+            subtitle={scanResult ? `Showing ${Math.min(5, totalTx)} of ${totalTx}` : "Scan a wallet to populate"}
+            action={
+              scanResult && totalTx > 0 ? (
+                <div className="hidden items-center gap-2 text-[10px] text-zinc-500 sm:flex">
+                  <span className="inline-flex items-center gap-1">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                    {confirmedCount} confirmed
+                  </span>
+                  {failedCount > 0 && (
+                    <span className="inline-flex items-center gap-1">
+                      <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
+                      {failedCount} failed
+                    </span>
+                  )}
+                </div>
+              ) : undefined
+            }
+          />
 
-            {scanResult && scanResult.items.length > 0 ? (
-              <div className="mt-4 space-y-1.5">
+          {scanResult && totalTx > 0 ? (
+            <>
+              {/* Status distribution */}
+              <div className="mt-4 flex h-1.5 overflow-hidden rounded-full bg-white/[0.05]">
+                <span
+                  className="bg-emerald-400/70"
+                  style={{ width: `${(confirmedCount / safeTx) * 100}%` }}
+                />
+                <span
+                  className="bg-rose-400/70"
+                  style={{ width: `${(failedCount / safeTx) * 100}%` }}
+                />
+              </div>
+
+              <div className="mt-3 space-y-1.5">
                 {scanResult.items.slice(0, 5).map((tx) => (
                   <div
                     key={tx.signature}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-white/[0.04] bg-[#111114] px-3 py-2.5"
+                    className="flex items-center justify-between gap-3 rounded-lg border border-white/[0.04] bg-[#111114] px-3 py-2.5 transition hover:border-white/[0.09]"
                   >
-                    <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex min-w-0 items-center gap-2">
                       <span
                         className={`h-1.5 w-1.5 shrink-0 rounded-full ${tx.status === "confirmed" ? "bg-emerald-400" : tx.status === "failed" ? "bg-rose-400" : "bg-zinc-500"}`}
                       />
-                      <span className="font-mono text-[11px] text-zinc-300 truncate max-w-[140px]">
+                      <span className="max-w-[140px] truncate font-mono text-[11px] text-zinc-300">
                         {tx.signature.slice(0, 20)}…
                       </span>
                       <button
                         onClick={() => handleCopy(tx.signature)}
-                        className="text-zinc-600 hover:text-zinc-300 shrink-0"
+                        aria-label="Copy signature"
+                        className="shrink-0 text-zinc-600 transition hover:text-zinc-300"
                       >
                         {copiedText === tx.signature ? (
                           <Check className="h-3 w-3 text-emerald-400" />
@@ -410,7 +617,7 @@ export default function DashboardPage() {
                         )}
                       </button>
                     </div>
-                    <div className="flex items-center gap-3 shrink-0">
+                    <div className="flex shrink-0 items-center gap-3">
                       {tx.sol_change_lamports !== null && (
                         <span
                           className={`flex items-center gap-0.5 font-mono text-[11px] font-semibold ${tx.sol_change_lamports >= 0 ? "text-emerald-400" : "text-rose-400"}`}
@@ -425,10 +632,11 @@ export default function DashboardPage() {
                         </span>
                       )}
                       <a
-                        href={`https://solscan.io/tx/${tx.signature}`}
+                        href={`https://explorer.solana.com/tx/${tx.signature}${scanResult.network === "mainnet" ? "" : `?cluster=${encodeURIComponent(scanResult.network)}`}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-zinc-600 hover:text-zinc-300"
+                        aria-label="Open transaction in explorer"
+                        className="text-zinc-600 transition hover:text-zinc-300"
                       >
                         <ExternalLink className="h-3 w-3" />
                       </a>
@@ -438,223 +646,180 @@ export default function DashboardPage() {
                 {totalTx > 5 && (
                   <Link
                     to={`/wallet-analysis?address=${encodeURIComponent(scanResult.address)}`}
-                    className="mt-2 flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-white/10 py-2 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+                    className="mt-2 flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-white/10 py-2 text-[11px] text-zinc-500 transition-colors hover:text-zinc-300"
                   >
                     View all {totalTx} transactions <ArrowRight className="h-3 w-3" />
                   </Link>
                 )}
               </div>
-            ) : (
-              <div className="mt-5 flex min-h-40 items-center justify-center rounded-xl border border-dashed border-white/[0.08]">
-                <p className="text-xs text-zinc-500">
-                  {scanResult ? "No transactions found for this address." : "Transactions appear after a quick scan."}
-                </p>
-              </div>
-            )}
-          </Panel>
-
-          {/* Recent scans history */}
-          <Panel>
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-white">Recent scans</h2>
-                <p className="mt-1 text-xs text-zinc-500">Your wallet scan history this session</p>
-              </div>
-              <FileClock className="h-4 w-4 text-zinc-500" />
+            </>
+          ) : (
+            <div className="mt-4 flex min-h-44 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/[0.08] text-center">
+              <Activity className="h-6 w-6 text-zinc-600" />
+              <p className="text-xs text-zinc-500">
+                {scanResult ? "No transactions found for this address." : "Transactions appear after a quick scan."}
+              </p>
             </div>
-            {recentScans.length > 0 ? (
-              <div className="mt-4 space-y-2">
-                {recentScans.map((scan, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-white/[0.04] bg-[#111114] px-3 py-2.5"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <ScanSearch className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
-                      <span className="font-mono text-[11px] text-zinc-300 truncate">
-                        {scan.address.slice(0, 16)}…{scan.address.slice(-6)}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-3 shrink-0 text-[11px]">
-                      <span className="text-zinc-500">{scan.txCount} txs</span>
-                      {scan.findings > 0 && (
-                        <span className="text-rose-400">{scan.findings} alerts</span>
-                      )}
-                      <button
-                        onClick={() => {
-                          setQuickAddress(scan.address);
-                          navigate(`/wallet-analysis?address=${encodeURIComponent(scan.address)}`);
-                        }}
-                        className="text-zinc-300 hover:text-white"
-                      >
-                        <ArrowRight className="h-3 w-3" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="mt-5 flex min-h-20 items-center justify-center rounded-xl border border-dashed border-white/[0.08] text-center">
-                <p className="text-xs text-zinc-500">Completed scans will appear here.</p>
-              </div>
-            )}
-          </Panel>
-        </div>
+          )}
+        </Panel>
 
-        <div className="space-y-4 xl:col-span-6">
-          {/* Live alerts */}
-          <Panel>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Bell className="h-4 w-4 text-zinc-400" />
-                <h2 className="text-lg font-semibold text-white">Rule-based alerts</h2>
-              </div>
-              <span className="rounded-full border border-white/[0.08] px-2 py-1 text-[10px] text-zinc-500">
-                RULE BASED
+        {/* Findings / alerts */}
+        <Panel className="xl:col-span-5">
+          <PanelHeader
+            icon={<Bell className="h-4 w-4" />}
+            title="Rule-based alerts"
+            subtitle="Deterministic checks over fetched activity"
+            action={
+              <span className="rounded-full border border-white/[0.08] px-2 py-1 text-[10px] uppercase tracking-wider text-zinc-500">
+                {totalFindings} total
               </span>
-            </div>
+            }
+          />
 
-            {scanResult && scanResult.findings.length > 0 ? (
-              <div className="mt-4 space-y-2">
-                {scanResult.findings.map((finding, i) => (
-                  <div
-                    key={i}
-                    className="rounded-xl border border-white/[0.05] bg-[#111114] p-3"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <ShieldAlert className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />
-                        <span className="text-xs font-medium text-zinc-200">
-                          {finding.rule_id}
-                        </span>
-                      </div>
-                      <SeverityBadge severity={finding.severity} />
+          {scanResult && scanResult.findings.length > 0 ? (
+            <div className="mt-4 space-y-2">
+              {scanResult.findings.map((finding, i) => (
+                <div
+                  key={i}
+                  className="rounded-xl border border-white/[0.05] bg-[#111114] p-3 transition hover:border-white/[0.1]"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />
+                      <span className="text-xs font-medium text-zinc-200">{finding.rule_id}</span>
                     </div>
-                    <p className="mt-1.5 text-[11px] text-zinc-400 leading-relaxed">
-                      {finding.description}
-                    </p>
-                    <p className="mt-1 text-[10px] font-mono text-zinc-600">
-                      Category: {finding.category}
-                    </p>
+                    <SeverityBadge severity={finding.severity} />
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="mt-4 flex min-h-24 items-center gap-3 rounded-xl bg-[#111114] px-4">
-                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/[0.04] text-zinc-500">
-                  <ShieldCheck className="h-4 w-4" />
-                </span>
-                <div>
-                  <p className="text-sm font-medium text-zinc-300">
-                    {scanResult ? "No alerts detected" : "No alerts to review"}
+                  <p className="mt-1.5 text-[11px] leading-relaxed text-zinc-400">
+                    {finding.description}
                   </p>
-                  <p className="mt-1 text-xs text-zinc-500">
-                    {scanResult
-                      ? "This wallet passed all rule checks."
-                      : "Evidence-backed alerts will show after a scan."}
+                  <p className="mt-1 font-mono text-[10px] text-zinc-600">
+                    Category: {finding.category}
                   </p>
                 </div>
-              </div>
-            )}
-          </Panel>
-
-          {/* Wallet summary */}
-          <Panel className="min-h-[330px]">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-medium uppercase tracking-[0.16em] text-zinc-500">
-                  Wallet summary
-                </p>
-                <h2 className="mt-1 text-lg font-semibold text-white">
-                  {scanResult ? "Analyzed" : "No wallet selected"}
-                </h2>
-              </div>
-              <Wallet className="h-5 w-5 text-zinc-400" />
-            </div>
-
-            <div className="mt-5 rounded-xl border border-white/[0.06] bg-[#111114] p-4">
-              <div className="flex items-center gap-3">
-                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/[0.06] text-zinc-300">
-                  <Wallet className="h-4 w-4" />
-                </span>
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-zinc-200">Public Solana address</p>
-                  {scanResult ? (
-                    <p className="mt-0.5 font-mono text-[11px] text-zinc-400 truncate">
-                      {scanResult.address}
-                    </p>
-                  ) : (
-                    <p className="mt-0.5 text-xs text-zinc-500">
-                      No address analyzed in this session
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div className="mt-5 grid grid-cols-3 gap-3 border-t border-white/[0.06] pt-4">
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider text-zinc-500">SOL balance</p>
-                  <p className="mt-1 text-xs font-mono text-zinc-300">
-                    {solBalance != null ? `${solBalance} SOL` : "—"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider text-zinc-500">Transactions</p>
-                  <p className="mt-1 text-xs font-mono text-zinc-300">
-                    {scanResult ? totalTx : "—"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider text-zinc-500">Findings</p>
-                  <p className={`mt-1 text-xs font-mono ${totalFindings > 0 ? "text-rose-400" : "text-zinc-300"}`}>
-                    {scanResult ? totalFindings : "—"}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Sparkline placeholder */}
-            <div
-              className="mt-4 flex h-12 items-end gap-1 overflow-hidden rounded-lg px-1 opacity-40"
-              aria-hidden="true"
-            >
-              {Array.from({ length: 48 }, (_, index) => (
-                <span
-                  key={index}
-                  className="h-full flex-1 rounded-t-sm bg-gradient-to-t from-white/5 to-white/25"
-                />
               ))}
             </div>
-
-            <div className="mt-5 flex flex-wrap gap-3">
-              {scanResult ? (
-                <Link
-                  to={`/wallet-analysis?address=${encodeURIComponent(scanResult.address)}`}
-                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-white px-4 py-2.5 text-xs font-semibold text-[#09090b] transition hover:bg-zinc-200"
-                >
-                  <ScanSearch className="h-3.5 w-3.5" /> Full analysis
-                </Link>
-              ) : (
-                <Link
-                  to="/wallet-analysis"
-                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-white px-4 py-2.5 text-xs font-semibold text-[#09090b] transition hover:bg-zinc-200"
-                >
-                  <ScanSearch className="h-3.5 w-3.5" /> Start wallet scan
-                </Link>
-              )}
-              {scanResult && (
-                <a
-                  href={`https://solscan.io/account/${scanResult.address}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/[0.1] px-4 py-2.5 text-xs font-medium text-zinc-300 transition hover:bg-white/[0.04]"
-                >
-                  Solscan <ExternalLink className="h-3.5 w-3.5" />
-                </a>
-              )}
+          ) : (
+            <div className="mt-4 flex min-h-44 items-center gap-3 rounded-xl border border-dashed border-white/[0.08] bg-[#111114]/60 px-4">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/[0.04] text-emerald-400">
+                <ShieldCheck className="h-5 w-5" />
+              </span>
+              <div>
+                <p className="text-sm font-medium text-zinc-300">
+                  {scanResult ? "No alerts detected" : "No alerts to review"}
+                </p>
+                <p className="mt-1 text-xs text-zinc-500">
+                  {scanResult
+                    ? "This wallet passed all rule checks in the scanned window."
+                    : "Evidence-backed alerts will show after a scan."}
+                </p>
+              </div>
             </div>
-          </Panel>
-        </div>
+          )}
+        </Panel>
+      </div>
+
+      {/* ── History + networks ── */}
+      <div className="grid gap-4 xl:grid-cols-12">
+        {/* Recent scans history */}
+        <Panel className="xl:col-span-7">
+          <PanelHeader
+            icon={<FileClock className="h-4 w-4" />}
+            title="Recent scans"
+            subtitle="Wallet scan history in this session"
+            action={
+              recentScans.length > 0 ? (
+                <button
+                  onClick={() => setRecentScans([])}
+                  className="rounded-lg border border-white/[0.08] px-2.5 py-1 text-[10px] text-zinc-500 transition hover:border-white/[0.16] hover:text-zinc-300"
+                >
+                  Clear
+                </button>
+              ) : undefined
+            }
+          />
+          {recentScans.length > 0 ? (
+            <div className="mt-4 space-y-2">
+              {recentScans.map((scan) => (
+                <button
+                  key={scan.address}
+                  onClick={() => {
+                    setQuickAddress(scan.address);
+                    navigate(`/wallet-analysis?address=${encodeURIComponent(scan.address)}`);
+                  }}
+                  className="flex w-full items-center justify-between gap-3 rounded-lg border border-white/[0.04] bg-[#111114] px-3 py-2.5 text-left transition hover:border-white/[0.1] hover:bg-[#141418]"
+                >
+                  <div className="flex min-w-0 items-center gap-2">
+                    <ScanSearch className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+                    <span className="truncate font-mono text-[11px] text-zinc-300">
+                      {truncAddress(scan.address, 16, 6)}
+                    </span>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3 text-[11px]">
+                    <span className="text-zinc-500">{formatTime(scan.ts)}</span>
+                    <span className="hidden text-zinc-500 sm:inline">{scan.txCount} txs</span>
+                    <span className="hidden text-zinc-400 sm:inline">{networkLabel(scan.network)}</span>
+                    {scan.findings > 0 && (
+                      <span className="text-rose-400">{scan.findings} alerts</span>
+                    )}
+                    <ArrowRight className="h-3 w-3 text-zinc-500" />
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-4 flex min-h-28 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/[0.08] text-center">
+              <FileClock className="h-6 w-6 text-zinc-600" />
+              <p className="text-xs text-zinc-500">Completed scans will appear here.</p>
+            </div>
+          )}
+        </Panel>
+
+        {/* Network presence */}
+        <Panel className="xl:col-span-5">
+          <PanelHeader
+            icon={<Globe className="h-4 w-4" />}
+            title="Network presence"
+            subtitle={scanProbe ? "Balance and activity per cluster" : "Run a scan to detect networks"}
+          />
+          {scanProbe ? (
+            <div className="mt-4 space-y-2">
+              {scanProbe.networks.map((network) => {
+                const meta = NETWORK_META[network.network];
+                return (
+                  <div
+                    key={network.network}
+                    className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 ${
+                      network.active
+                        ? "border-white/[0.09] bg-white/[0.03]"
+                        : "border-white/[0.04] opacity-55"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`h-2 w-2 rounded-full ${network.active ? meta?.dot ?? "bg-zinc-400" : "bg-zinc-700"}`}
+                      />
+                      <span className={`text-xs font-medium ${network.active ? "text-zinc-200" : "text-zinc-500"}`}>
+                        {networkLabel(network.network)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 font-mono text-[11px]">
+                      <span className="text-zinc-400">
+                        {network.balance_sol !== null ? `${network.balance_sol.toFixed(4)} SOL` : "—"}
+                      </span>
+                      <span className="text-zinc-500">{network.recent_tx_count} tx</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="mt-4 flex min-h-28 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/[0.08] text-center">
+              <Globe className="h-6 w-6 text-zinc-600" />
+              <p className="text-xs text-zinc-500">Cluster presence appears after a scan.</p>
+            </div>
+          )}
+        </Panel>
       </div>
 
       <div className="flex items-center justify-center gap-2 pt-1 text-[10px] text-zinc-600">

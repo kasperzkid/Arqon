@@ -35,7 +35,7 @@
 .docs-nav-group a:hover { color: #edf0ee; }
 .docs-nav-group a.docs-nav-active { background: transparent; color: #d6dcd8; }
 .docs-nav-group a.docs-nav-active::before { display: none; }
-.docs-nav-group a.docs-nav-active::after { position: absolute; right: 10px; bottom: 3px; left: 10px; height: 1px; background: var(--docs-accent); content: ""; }
+.docs-nav-group a.docs-nav-active { text-decoration-line: underline; text-decoration-color: var(--docs-accent); text-decoration-thickness: 1px; text-underline-offset: 5px; }
 .docs-sidebar-bottom { margin-top: auto; padding: 13px 10px 3px; display: flex; align-items: center; gap: 8px; border-top: 1px solid rgba(255,255,255,.08); color: #9da49f; font-size: 10px; }
 .docs-sidebar-bottom svg { color: var(--docs-accent); }
 .docs-main { width: min(100%, 1120px); min-width: 0; padding: 32px clamp(28px, 5.2vw, 76px) 55px; }

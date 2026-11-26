@@ -99,3 +99,21 @@
 .candlestick-glow {
   background: radial-gradient(ellipse at 50% 90%, rgba(169, 155, 233, 0.14) 0%, rgba(169, 155, 233, 0.035) 45%, transparent 75%);
 }
+
+@keyframes meteor {
+  0% {
+    transform: rotate(var(--angle)) translateX(0);
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(var(--angle)) translateX(-500px);
+    opacity: 0;
+  }
+}
+
+.animate-meteor {
+  animation: meteor 5s linear infinite;
+}

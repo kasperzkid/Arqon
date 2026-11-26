@@ -1,6 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
 import {
-  Home,
   LayoutDashboard,
   Wallet,
   ListOrdered,
@@ -11,7 +10,6 @@ import { Dock, DockIcon } from "../components/ui/dock";
 import { cn } from "../lib/utils";
 
 const NAV_ITEMS = [
-  { to: "/", label: "Home", icon: Home },
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/wallet-analysis", label: "Wallets", icon: Wallet },
   { to: "/security-findings", label: "Alerts", icon: ShieldAlert },
@@ -23,10 +21,10 @@ export function Sidebar() {
   const location = useLocation();
 
   return (
-    <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 select-none">
+    <div className="fixed inset-x-0 bottom-0 z-50 flex justify-center pb-[env(safe-area-inset-bottom)] select-none">
       <Dock
         disableMagnification
-        className="h-auto gap-1.5 rounded-full border border-white/[0.1] bg-[#0c0c0f]/90 px-2.5 py-1.5 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.75)]"
+        className="h-auto !w-full !max-w-none !mx-0 !justify-center gap-1 rounded-t-2xl rounded-b-none border-x-0 border-b-0 border-t border-white/[0.1] bg-[#0c0c0f]/95 px-2 py-1 backdrop-blur-xl shadow-[0_-12px_40px_rgba(0,0,0,0.45)]"
       >
         {NAV_ITEMS.map((item) => {
           const isActive = location.pathname === item.to;
@@ -34,7 +32,7 @@ export function Sidebar() {
             <DockIcon
               key={item.to}
               className={cn(
-                "h-11 rounded-full px-4 transition-all duration-150",
+                "h-9 w-16 !flex-none rounded-xl px-1 transition-all duration-150",
                 isActive
                   ? "bg-white/[0.14] text-white ring-1 ring-white/20"
                   : "text-zinc-400 hover:bg-white/[0.07] hover:text-white",
